@@ -1,0 +1,20 @@
+{
+    "KPlugin": {
+        "Name": "KWin keymapper: monitor active window",
+        "Description": "Publishing DBus message on active window changed to support application specific key mapper",
+        "Icon": "preferences-system-windows",
+        "Authors": [
+            {
+                "Email": "minhvh99@gmail.com",
+                "Name": "Minh Vu"
+            }
+        ],
+        "Id": "kwin_app_keymapper",
+        "Version": "1.0",
+        "License": "GPLv3",
+        "Website": "https://github.com/vhminh/kwin-keymapper"
+    },
+    "X-Plasma-API": "javascript",
+    "X-Plasma-MainScript": "code/main.js",
+    "KPackageStructure": "KWin/Script"
+}
