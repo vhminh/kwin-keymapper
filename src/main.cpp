@@ -4,6 +4,7 @@
 #include "window.h"
 
 #include <atomic>
+#include <cstring>
 #include <dbus/dbus.h>
 #include <fcntl.h>
 #include <libevdev/libevdev.h>
@@ -24,16 +25,25 @@ struct std::formatter<DBusError> : std::formatter<std::string> {
     }
 };
 
-void monitor_active_window(const std::stop_token& token, std::atomic<Arc<Window>>& active_window) {
+void monitor_active_window(
+    const std::stop_token& token, const char* dbus_addr, std::atomic<Arc<Window>>& active_window
+) {
     DBusError err;
     dbus_error_init(&err);
     DEFER(dbus_error_free(&err));
 
-    DBusConnection* conn = dbus_bus_get(DBUS_BUS_SESSION, &err);
+    LOG_INFO("connecting to DBus at: {}", dbus_addr);
+    DBusConnection* conn = dbus_connection_open(dbus_addr, &err);
     if (dbus_error_is_set(&err)) {
         LOG_ERROR("error getting DBus session connection: {}", err);
         return;
     }
+
+    if (!dbus_bus_register(conn, &err)) {
+        LOG_ERROR("cannot register bus: {}", err);
+        return;
+    }
+
     int ret = dbus_bus_request_name(conn, "io.github.vhminh.kwin_keymapper", DBUS_NAME_FLAG_REPLACE_EXISTING, &err);
     if (dbus_error_is_set(&err)) {
         LOG_ERROR("error requesting DBus name: {}", err);
@@ -43,11 +53,7 @@ void monitor_active_window(const std::stop_token& token, std::atomic<Arc<Window>
         LOG_ERROR("not DBus name primary owner: {}", ret);
         return;
     }
-    dbus_bus_add_match(conn, "type='signal',interface='io.github.vhminh.kwin_keymapper'", &err);
-    if (dbus_error_is_set(&err)) {
-        LOG_ERROR("error adding DBus matching rule: {}", err);
-        return;
-    }
+
     // poll with 1000ms timeout so stop token is checked
     while (dbus_connection_read_write(conn, 1000) && !token.stop_requested()) {
         DBusMessage* msg = dbus_connection_pop_message(conn);
@@ -119,15 +125,28 @@ void process_key(const std::stop_token& token, const std::atomic<Arc<Window>>& a
     }
 }
 
-int main() {
+void print_help() {
+    std::cout << "Usage: sudo kwin-keymapper $DBUS_SESSION_BUS_ADDRESS" << std::endl;
+}
+
+int main(int argc, const char* argv[]) {
+    if (argc != 2) {
+        print_help();
+        return 1;
+    }
+    if (std::strcmp(argv[1], "--help") == 0 || std::strcmp(argv[1], "-h") == 0) {
+        print_help();
+        return 0;
+    }
     LOG_INFO("KWin keymapper starting");
+    LOG_INFO("DBus address: {}", argv[1]);
 
     std::atomic<Arc<Window>> active_window;
     std::stop_source cancel;
     std::jthread t1([&]() {
         LOG_INFO("starting new thread to monitor DBus for active window change");
         try {
-            monitor_active_window(cancel.get_token(), active_window);
+            monitor_active_window(cancel.get_token(), argv[1], active_window);
             cancel.request_stop();
         } catch (...) {
             cancel.request_stop();
