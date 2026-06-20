@@ -7,14 +7,17 @@
 #define COLOR_RED "\033[31m"
 #define COLOR_YELLOW "\033[33m"
 
-#define LOG_DEBUG(fmt, ...) std::cerr << "[DEBUG]: " << std::format(fmt __VA_OPT__(, ) __VA_ARGS__) << std::endl
+#define LOG_IMPL(level, color, fmt, ...)                                                                               \
+    std::cerr << std::format(color "[" level "]: " COLOR_RESET fmt "\n" __VA_OPT__(, ) __VA_ARGS__)
 
-#define LOG_INFO(fmt, ...) std::cerr << "[INFO]: " << std::format(fmt __VA_OPT__(, ) __VA_ARGS__) << std::endl
+#define LOG_DEBUG(fmt, ...) LOG_IMPL("DEBUG", COLOR_RESET, fmt, __VA_ARGS__)
+
+#define LOG_INFO(fmt, ...) LOG_IMPL("INFO", COLOR_RESET, fmt, __VA_ARGS__)
 
 #define LOG_WARN(fmt, ...)                                                                                             \
-    std::cerr << (isatty(STDERR_FILENO) ? COLOR_YELLOW "[WARN]: " COLOR_RESET : "[WARN]: ")                            \
-              << std::format(fmt __VA_OPT__(, ) __VA_ARGS__) << std::endl
+    isatty(STDERR_FILENO) ? LOG_IMPL("WARN", COLOR_YELLOW, fmt, __VA_ARGS__) :                                         \
+                            LOG_IMPL("WARN", COLOR_RESET, fmt, __VA_ARGS__)
 
 #define LOG_ERROR(fmt, ...)                                                                                            \
-    std::cerr << (isatty(STDERR_FILENO) ? COLOR_RED "[ERROR]: " COLOR_RESET : "[ERROR]: ")                             \
-              << std::format(fmt __VA_OPT__(, ) __VA_ARGS__) << std::endl
+    isatty(STDERR_FILENO) ? LOG_IMPL("ERROR", COLOR_RED, fmt, __VA_ARGS__) :                                           \
+                            LOG_IMPL("ERROR", COLOR_RESET, fmt, __VA_ARGS__)
