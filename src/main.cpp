@@ -1,8 +1,10 @@
+#include "argparse.h"
 #include "config.h"
 #include "defer.h"
 #include "log.h"
 #include "window.h"
 
+#include <argp.h>
 #include <atomic>
 #include <cstring>
 #include <dbus/dbus.h>
@@ -91,32 +93,38 @@ void monitor_active_window(
             continue;
         }
 
-        Arc<Window> old = active_window.load();
-        if (old != nullptr) {
-            LOG_INFO("window become inactive, class: {}, name: {}, caption: {}", old->xclass, old->name, old->caption);
-        }
         Arc<Window> newly_active = std::make_shared<Window>(win_class, win_name, win_caption);
         active_window.store(newly_active);
         LOG_INFO("window activated, class: {}, name: {}, caption: {}", win_class, win_name, win_caption);
     }
 }
 
-void process_key(const std::stop_token& token, const std::atomic<Arc<Window>>& active_window) {
-    // for (int id = 0; id < 25; ++id) {
-    //     const int fd = open((string("/dev/input/event") + to_string(id)).c_str(), O_RDONLY | O_NONBLOCK);
-    //     if (fd == -1) {
-    //         cerr << "Failed to open /dev/input/event" << id << endl;
-    //         return;
-    //     }
-    //     DEFER(close(fd));
-    //     libevdev* dev = nullptr;
-    //     int err = libevdev_new_from_fd(fd, &dev);
-    //     if (err) {
-    //         cerr << "Failed to init libevdev (" << err << ")" << endl;
-    //         return;
-    //     }
-    //     cerr << id << " Input device name: " << libevdev_get_name(dev) << endl;
-    // }
+void process_key(
+    const std::stop_token& token, const char* kb_device_file, const std::atomic<Arc<Window>>& active_window
+) {
+    const int fd = open(kb_device_file, O_RDONLY | O_NONBLOCK);
+    if (fd == -1) {
+        LOG_ERROR("failed to open device file {}", kb_device_file);
+        return;
+    }
+    DEFER(close(fd));
+    libevdev* dev = nullptr;
+    int err = libevdev_new_from_fd(fd, &dev);
+    if (err) {
+        LOG_ERROR("failed to init libevdev: {}", err);
+        return;
+    }
+    LOG_INFO("input device name: {}", libevdev_get_name(dev));
+    bool is_keyboard = libevdev_has_event_type(dev, EV_KEY) &&        //
+                       libevdev_has_event_code(dev, EV_KEY, KEY_M) && //
+                       libevdev_has_event_code(dev, EV_KEY, KEY_I) && //
+                       libevdev_has_event_code(dev, EV_KEY, KEY_N) && //
+                       libevdev_has_event_code(dev, EV_KEY, KEY_H) && //
+                       libevdev_has_event_code(dev, EV_KEY, KEY_ENTER);
+    if (!is_keyboard) {
+        LOG_ERROR("device is not a keyboard");
+        return;
+    }
     while (!token.stop_requested()) {
         auto w = active_window.load();
         user_process_key(active_window.load(), 0);
@@ -126,27 +134,43 @@ void process_key(const std::stop_token& token, const std::atomic<Arc<Window>>& a
 }
 
 void print_help() {
-    std::cout << "Usage: sudo kwin-keymapper $DBUS_SESSION_BUS_ADDRESS" << std::endl;
+    std::cout << "Usage: sudo kwin-keymapper --dbus-addr $DBUS_SESSION_BUS_ADDRESS --device-file /dev/input/eventX"
+              << std::endl;
 }
 
 int main(int argc, const char* argv[]) {
-    if (argc != 2) {
-        print_help();
-        return 1;
-    }
     if (std::strcmp(argv[1], "--help") == 0 || std::strcmp(argv[1], "-h") == 0) {
         print_help();
         return 0;
     }
+    std::map<std::string_view, const char*> opts;
+    try {
+        opts = parse_opts(argc, argv);
+    } catch (const ArgParseException& ex) {
+        LOG_ERROR("error parsing arguments: {}", ex.what());
+        print_help();
+        return 1;
+    }
+    if (!opts["--dbus-addr"]) {
+        LOG_ERROR("missing DBus address");
+        print_help();
+        return 1;
+    }
+    if (!opts["--device-file"]) {
+        LOG_ERROR("missing device file");
+        print_help();
+        return 1;
+    }
     LOG_INFO("KWin keymapper starting");
-    LOG_INFO("DBus address: {}", argv[1]);
+    LOG_INFO("DBus address: {}", opts["--dbus-addr"]);
+    LOG_INFO("Device file: {}", opts["--device-file"]);
 
     std::atomic<Arc<Window>> active_window;
     std::stop_source cancel;
     std::jthread t1([&]() {
         LOG_INFO("starting new thread to monitor DBus for active window change");
         try {
-            monitor_active_window(cancel.get_token(), argv[1], active_window);
+            monitor_active_window(cancel.get_token(), opts["--dbus-addr"], active_window);
             cancel.request_stop();
         } catch (...) {
             cancel.request_stop();
@@ -157,7 +181,7 @@ int main(int argc, const char* argv[]) {
     std::jthread t2([&]() {
         LOG_INFO("starting new thread to process evdev events");
         try {
-            process_key(cancel.get_token(), active_window);
+            process_key(cancel.get_token(), opts["--device-file"], active_window);
             cancel.request_stop();
         } catch (...) {
             cancel.request_stop();

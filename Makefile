@@ -6,10 +6,12 @@ LIBS := libevdev dbus-1
 CXXFLAGS += $(shell pkg-config --cflags $(LIBS))
 LDLIBS += $(shell pkg-config --libs $(LIBS))
 
-SRCS := src/config.cpp \
+SRCS := src/argparse.cpp \
+        src/config.cpp \
         src/main.cpp
 
-HDRS := src/config.h \
+HDRS := src/argparse.h \
+        src/config.h \
         src/defer.h \
         src/log.h
 

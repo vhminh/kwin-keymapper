@@ -18,5 +18,5 @@ add policy to allow su to access session bus
 
 ## Usage
 ```sh
-make && sudo ./kwin-keymapper $DBUS_SESSION_BUS_ADDRESS
+make && sudo ./kwin-keymapper --dbus-addr $DBUS_SESSION_BUS_ADDRESS --device-file /dev/input/eventX
 ```
