@@ -3,6 +3,10 @@
 #include "kb.h"
 #include "window.h"
 
+#include <memory>
 #include <tuple>
 
-std::tuple<Mod, int> user_process_key(const Window* active_window, Mod mods, int evdev_key);
+template <typename T>
+using Arc = std::shared_ptr<T>;
+
+std::tuple<Mod, int> user_key_map(const Arc<Window>& active_window, Mod mods, int evdev_key);

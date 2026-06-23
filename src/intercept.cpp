@@ -1,8 +1,10 @@
 #include "intercept.h"
 
-EvDevInterceptor::EvDevInterceptor() : held_mods(Mod::None) {}
+#include "config.h"
 
-std::vector<input_event> EvDevInterceptor::process_evdev_key(const Window* active_window, const input_event& ev) {
+EvDevInterceptor::EvDevInterceptor() : held_mods(Mod::NONE) {}
+
+std::vector<input_event> EvDevInterceptor::process_evdev_key(const Arc<Window>& active_window, const input_event& ev) {
     std::vector<input_event> result;
     result.push_back(ev);
     return result;

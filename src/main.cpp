@@ -206,7 +206,7 @@ void process_key(
             switch (err) {
             case LIBEVDEV_READ_STATUS_SUCCESS: {
                 if (ev.type == EV_KEY) {
-                    auto events = interceptor.process_evdev_key(active_window.load().get(), ev);
+                    auto events = interceptor.process_evdev_key(active_window, ev);
                     for (const auto& ev : events) {
                         libevdev_uinput_write_event(virtual_kbd, ev.type, ev.code, ev.value);
                     }
@@ -223,7 +223,7 @@ void process_key(
             }
             default: {
                 LOG_ERROR("error reading next evdev event: {}", err);
-                break;
+                return;
             }
             }
         } while (!token.stop_requested() && (err == LIBEVDEV_READ_STATUS_SUCCESS || err == LIBEVDEV_READ_STATUS_SYNC));

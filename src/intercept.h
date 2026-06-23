@@ -1,5 +1,6 @@
 #pragma once
 
+#include "config.h"
 #include "kb.h"
 #include "window.h"
 
@@ -9,7 +10,7 @@
 class EvDevInterceptor {
 public:
     EvDevInterceptor();
-    std::vector<input_event> process_evdev_key(const Window* active_window, const input_event&);
+    std::vector<input_event> process_evdev_key(const Arc<Window>& active_window, const input_event&);
 
 private:
     Mod held_mods;

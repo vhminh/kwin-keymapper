@@ -1,8 +1,10 @@
 #pragma once
 #include <cstdint>
 
+typedef uint32_t ModMask;
+
 enum Mod : uint32_t {
-    None = 0,
+    NONE = 0,
 
     LEFT_CTRL = 1 << 0,
     RIGHT_CTRL = 1 << 1,
