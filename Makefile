@@ -1,7 +1,7 @@
 .PHONY: all install run clean
 
 CXX := g++
-CXXFLAGS := -O2 -std=c++20 -Wall -Wextra -I src
+CXXFLAGS += -O2 -std=c++20 -Wall -Wextra -I src
 LIBS := libevdev dbus-1
 CXXFLAGS += $(shell pkg-config --cflags $(LIBS))
 LDLIBS += $(shell pkg-config --libs $(LIBS))

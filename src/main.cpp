@@ -10,10 +10,20 @@
 #include <dbus/dbus.h>
 #include <fcntl.h>
 #include <libevdev/libevdev.h>
+#include <linux/input.h>
 #include <memory>
 #include <string>
 #include <thread>
 #include <unistd.h>
+
+// this tool grabs your keyboard inputs
+// while developing, you can't send SIGINT to the process without your keyboard :)
+// set this flag to make it auto exits after 6 seconds
+// #define AUTO_EXIT
+
+#ifdef AUTO_EXIT
+#include <chrono>
+#endif
 
 template <typename T>
 using Arc = std::shared_ptr<T>;
@@ -99,6 +109,35 @@ void monitor_active_window(
     }
 }
 
+bool any_key_pressed(libevdev* dev) {
+    for (int key = 0; key < KEY_MAX; ++key) {
+        if (libevdev_has_event_code(dev, EV_KEY, key)) {
+            if (libevdev_get_event_value(dev, EV_KEY, key) != 0) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool wait_until_all_keys_released(libevdev* dev) {
+    int tries = 20;
+    while (tries-- > 0) {
+        input_event ev;
+        int err = libevdev_next_event(dev, LIBEVDEV_READ_FLAG_NORMAL, &ev);
+        if (err < 0 && err != -EAGAIN) {
+            LOG_ERROR("error reading next event: {}", err);
+            return true;
+        }
+        if (!any_key_pressed(dev)) {
+            return true;
+        }
+        using namespace std::chrono_literals;
+        std::this_thread::sleep_for(100ms);
+    }
+    return false;
+}
+
 void process_key(
     const std::stop_token& token, const char* kb_device_file, const std::atomic<Arc<Window>>& active_window
 ) {
@@ -125,6 +164,15 @@ void process_key(
         LOG_ERROR("device is not a keyboard");
         return;
     }
+    if (!wait_until_all_keys_released(dev)) {
+        LOG_ERROR("get your hands off the keyboard, lol");
+        return;
+    }
+    if ((err = libevdev_grab(dev, LIBEVDEV_GRAB)) != 0) {
+        LOG_ERROR("error grabing device fd: {}", err);
+        return;
+    }
+    DEFER(libevdev_grab(dev, LIBEVDEV_UNGRAB));
     while (!token.stop_requested()) {
         auto w = active_window.load();
         user_process_key(active_window.load(), 0);
@@ -162,6 +210,11 @@ int main(int argc, const char* argv[]) {
         return 1;
     }
     LOG_INFO("KWin keymapper starting");
+#ifdef AUTO_EXIT
+    LOG_INFO("AUTO_EXIT: true");
+#else
+    LOG_INFO("AUTO_EXIT: false");
+#endif
     LOG_INFO("DBus address: {}", opts["--dbus-addr"]);
     LOG_INFO("Device file: {}", opts["--device-file"]);
 
@@ -189,6 +242,14 @@ int main(int argc, const char* argv[]) {
         }
         LOG_INFO("stopped processing evdev event thread");
     });
+
+#ifdef AUTO_EXIT
+    {
+        using namespace std::chrono_literals;
+        std::this_thread::sleep_for(6000ms);
+        cancel.request_stop();
+    }
+#endif
 
     t1.join();
     t2.join();
