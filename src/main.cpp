@@ -9,10 +9,13 @@
 #include <cstring>
 #include <dbus/dbus.h>
 #include <fcntl.h>
+#include <libevdev/libevdev-uinput.h>
 #include <libevdev/libevdev.h>
+#include <linux/input-event-codes.h>
 #include <linux/input.h>
 #include <memory>
 #include <string>
+#include <sys/poll.h>
 #include <thread>
 #include <unistd.h>
 
@@ -147,37 +150,59 @@ void process_key(
         return;
     }
     DEFER(close(fd));
-    libevdev* dev = nullptr;
-    int err = libevdev_new_from_fd(fd, &dev);
-    if (err) {
+    libevdev* kbd = nullptr;
+    int err;
+    if ((err = libevdev_new_from_fd(fd, &kbd)) != 0) {
         LOG_ERROR("failed to init libevdev: {}", err);
         return;
     }
-    LOG_INFO("input device name: {}", libevdev_get_name(dev));
-    bool is_keyboard = libevdev_has_event_type(dev, EV_KEY) &&        //
-                       libevdev_has_event_code(dev, EV_KEY, KEY_M) && //
-                       libevdev_has_event_code(dev, EV_KEY, KEY_I) && //
-                       libevdev_has_event_code(dev, EV_KEY, KEY_N) && //
-                       libevdev_has_event_code(dev, EV_KEY, KEY_H) && //
-                       libevdev_has_event_code(dev, EV_KEY, KEY_ENTER);
+    LOG_INFO("input device name: {}", libevdev_get_name(kbd));
+    bool is_keyboard = libevdev_has_event_type(kbd, EV_KEY) &&        //
+                       libevdev_has_event_code(kbd, EV_KEY, KEY_M) && //
+                       libevdev_has_event_code(kbd, EV_KEY, KEY_I) && //
+                       libevdev_has_event_code(kbd, EV_KEY, KEY_N) && //
+                       libevdev_has_event_code(kbd, EV_KEY, KEY_H) && //
+                       libevdev_has_event_code(kbd, EV_KEY, KEY_ENTER);
     if (!is_keyboard) {
         LOG_ERROR("device is not a keyboard");
         return;
     }
-    if (!wait_until_all_keys_released(dev)) {
+    if (!wait_until_all_keys_released(kbd)) {
         LOG_ERROR("get your hands off the keyboard, lol");
         return;
     }
-    if ((err = libevdev_grab(dev, LIBEVDEV_GRAB)) != 0) {
+    if ((err = libevdev_grab(kbd, LIBEVDEV_GRAB)) != 0) {
         LOG_ERROR("error grabing device fd: {}", err);
         return;
     }
-    DEFER(libevdev_grab(dev, LIBEVDEV_UNGRAB));
+    DEFER(libevdev_grab(kbd, LIBEVDEV_UNGRAB));
+    const int uinput_fd = open("/dev/uinput", O_RDWR);
+    libevdev_uinput* virtual_kbd;
+    if ((err = libevdev_uinput_create_from_device(kbd, uinput_fd, &virtual_kbd)) != 0) {
+        LOG_ERROR("cannot create virtual keyboard: {}", err);
+        return;
+    }
+    pollfd pfd{.fd = fd, .events = POLLIN, .revents = 0};
     while (!token.stop_requested()) {
-        auto w = active_window.load();
-        user_process_key(active_window.load(), 0);
-        // input_event ev;
-        // libevdev_next_event();
+        poll(&pfd, 1, 1000);
+        input_event ev;
+        err = libevdev_next_event(kbd, LIBEVDEV_READ_FLAG_NORMAL, &ev);
+        if (err == -EAGAIN) {
+            continue;
+        }
+        if (err == LIBEVDEV_READ_STATUS_SYNC) {
+            TODO("LIBEVDEV_READ_STATUS_SYNC not supported");
+        }
+        if (err != LIBEVDEV_READ_STATUS_SUCCESS) {
+            LOG_ERROR("error reading next evdev event: {}", err);
+            return;
+        }
+        if (ev.type != EV_KEY) {
+            continue;
+        }
+        // user_process_key(active_window.load().get(), static_cast<Mod>(LEFT_CTRL | RIGHT_CTRL), 0);
+        libevdev_uinput_write_event(virtual_kbd, ev.type, ev.code, ev.value);
+        libevdev_uinput_write_event(virtual_kbd, EV_SYN, SYN_REPORT, 0);
     }
 }
 

@@ -1,7 +1,5 @@
 #include "config.h"
 
-#include "log.h"
-
-void user_process_key(Arc<Window> active_window, int key) {
+void user_process_key(const Window* active_window, Mod mods, int evdev_key) {
     // LOG_DEBUG("user process key: {}", key);
 }
