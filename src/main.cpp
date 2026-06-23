@@ -183,32 +183,50 @@ void process_key(
         return;
     }
     EvDevInterceptor interceptor;
+    pollfd pfd{.fd = fd, .events = POLLIN, .revents = 0};
     while (!token.stop_requested()) {
-        if ((err = libevdev_has_event_pending(kbd)) < 0) {
-            LOG_ERROR("poll libevdev event error: {}", err);
+        const int n = poll(&pfd, 1, 1000);
+        if (n < 0) {
+            LOG_ERROR("poll error: {}", n);
             return;
+        }
+        if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+            LOG_ERROR("poll revents error: {}", pfd.revents);
+            return;
+        }
+        if (n == 0) {
+            continue;
         }
         input_event ev;
-        err = libevdev_next_event(kbd, LIBEVDEV_READ_FLAG_NORMAL, &ev);
-        if (err == -EAGAIN) {
-            continue;
-        }
-        if (err == LIBEVDEV_READ_STATUS_SYNC) {
-            TODO("LIBEVDEV_READ_STATUS_SYNC not supported");
-        }
-        if (err != LIBEVDEV_READ_STATUS_SUCCESS) {
-            LOG_ERROR("error reading next evdev event: {}", err);
-            return;
-        }
-        if (ev.type != EV_KEY) {
-            // pass through
-            libevdev_uinput_write_event(virtual_kbd, ev.type, ev.code, ev.value);
-            continue;
-        }
-        auto events = interceptor.process_evdev_key(active_window.load().get(), ev);
-        for (const auto& ev : events) {
-            libevdev_uinput_write_event(virtual_kbd, ev.type, ev.code, ev.value);
-        }
+        do {
+            err = libevdev_next_event(kbd, LIBEVDEV_READ_FLAG_NORMAL, &ev);
+            if (err == -EAGAIN) {
+                break;
+            }
+            switch (err) {
+            case LIBEVDEV_READ_STATUS_SUCCESS: {
+                if (ev.type == EV_KEY) {
+                    auto events = interceptor.process_evdev_key(active_window.load().get(), ev);
+                    for (const auto& ev : events) {
+                        libevdev_uinput_write_event(virtual_kbd, ev.type, ev.code, ev.value);
+                    }
+                    libevdev_uinput_write_event(virtual_kbd, EV_SYN, SYN_REPORT, 0);
+                } else {
+                    // pass through
+                    libevdev_uinput_write_event(virtual_kbd, ev.type, ev.code, ev.value);
+                }
+                break;
+            }
+            case LIBEVDEV_READ_STATUS_SYNC: {
+                TODO("LIBEVDEV_READ_STATUS_SYNC not supported");
+                break;
+            }
+            default: {
+                LOG_ERROR("error reading next evdev event: {}", err);
+                break;
+            }
+            }
+        } while (!token.stop_requested() && (err == LIBEVDEV_READ_STATUS_SUCCESS || err == LIBEVDEV_READ_STATUS_SYNC));
     }
 }
 
