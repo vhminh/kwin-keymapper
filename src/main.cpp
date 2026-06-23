@@ -1,6 +1,6 @@
 #include "argparse.h"
-#include "config.h"
 #include "defer.h"
+#include "intercept.h"
 #include "log.h"
 #include "window.h"
 
@@ -182,9 +182,12 @@ void process_key(
         LOG_ERROR("cannot create virtual keyboard: {}", err);
         return;
     }
-    pollfd pfd{.fd = fd, .events = POLLIN, .revents = 0};
+    EvDevInterceptor interceptor;
     while (!token.stop_requested()) {
-        poll(&pfd, 1, 1000);
+        if ((err = libevdev_has_event_pending(kbd)) < 0) {
+            LOG_ERROR("poll libevdev event error: {}", err);
+            return;
+        }
         input_event ev;
         err = libevdev_next_event(kbd, LIBEVDEV_READ_FLAG_NORMAL, &ev);
         if (err == -EAGAIN) {
@@ -198,11 +201,14 @@ void process_key(
             return;
         }
         if (ev.type != EV_KEY) {
+            // pass through
+            libevdev_uinput_write_event(virtual_kbd, ev.type, ev.code, ev.value);
             continue;
         }
-        // user_process_key(active_window.load().get(), static_cast<Mod>(LEFT_CTRL | RIGHT_CTRL), 0);
-        libevdev_uinput_write_event(virtual_kbd, ev.type, ev.code, ev.value);
-        libevdev_uinput_write_event(virtual_kbd, EV_SYN, SYN_REPORT, 0);
+        auto events = interceptor.process_evdev_key(active_window.load().get(), ev);
+        for (const auto& ev : events) {
+            libevdev_uinput_write_event(virtual_kbd, ev.type, ev.code, ev.value);
+        }
     }
 }
 

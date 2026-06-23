@@ -8,12 +8,16 @@ LDLIBS += $(shell pkg-config --libs $(LIBS))
 
 SRCS := src/argparse.cpp \
         src/config.cpp \
+        src/intercept.cpp \
         src/main.cpp
 
 HDRS := src/argparse.h \
         src/config.h \
         src/defer.h \
-        src/log.h
+        src/intercept.h \
+        src/kb.h \
+        src/log.h \
+        src/window.h
 
 TARGET := kwin-keymapper
 
