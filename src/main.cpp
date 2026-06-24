@@ -50,6 +50,7 @@ void monitor_active_window(
         LOG_ERROR("error getting DBus session connection: {}", err);
         return;
     }
+    DEFER(dbus_connection_unref(conn));
 
     if (!dbus_bus_register(conn, &err)) {
         LOG_ERROR("cannot register bus: {}", err);
@@ -175,6 +176,10 @@ void process_key(
     }
     DEFER(libevdev_grab(kbd, LIBEVDEV_UNGRAB));
     const int uinput_fd = open("/dev/uinput", O_RDWR);
+    if (uinput_fd == -1) {
+        LOG_ERROR("failed to open /dev/uinput");
+        return;
+    }
     DEFER(close(uinput_fd));
     libevdev_uinput* virtual_kbd = nullptr;
     if ((err = libevdev_uinput_create_from_device(kbd, uinput_fd, &virtual_kbd)) != 0) {
@@ -198,6 +203,7 @@ void process_key(
             continue;
         }
         input_event ev;
+        Arc<Window> cur_active_window = active_window.load(); // atomic load once per poll wakeup
         do {
             err = libevdev_next_event(kbd, LIBEVDEV_READ_FLAG_NORMAL, &ev);
             if (err == -EAGAIN) {
@@ -206,7 +212,7 @@ void process_key(
             switch (err) {
             case LIBEVDEV_READ_STATUS_SUCCESS: {
                 if (ev.type == EV_KEY) {
-                    auto events = interceptor.process_evdev_key(active_window, ev);
+                    auto events = interceptor.process_evdev_key(cur_active_window, ev);
                     for (const auto& ev : events) {
                         libevdev_uinput_write_event(virtual_kbd, ev.type, ev.code, ev.value);
                     }
