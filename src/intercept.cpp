@@ -86,8 +86,9 @@ std::tuple<ModMask, ModMask> apply_events_to_mods(
     return std::make_tuple(phys, virt);
 }
 
-std::vector<input_event> EvDevInterceptor::process_evdev_key(const Arc<Window>& active_window, const input_event& ev) {
-    std::vector<input_event> result;
+void EvDevInterceptor::process_evdev_key(
+    const Arc<Window>& active_window, const input_event& ev, std::vector<input_event>& result
+) {
     if (is_evdev_mod(ev.code)) {
         produce_mod_diff(this->virt_mods, this->phys_mods, ev.time, result);
         result.push_back(ev);
@@ -97,5 +98,4 @@ std::vector<input_event> EvDevInterceptor::process_evdev_key(const Arc<Window>& 
         result.push_back(input_event{.time = ev.time, .type = ev.type, .code = expected_key, .value = ev.value});
     }
     std::tie(this->phys_mods, this->virt_mods) = apply_events_to_mods(this->phys_mods, this->virt_mods, ev, result);
-    return result;
 }

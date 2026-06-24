@@ -189,6 +189,8 @@ void process_key(
     DEFER(libevdev_uinput_destroy(virtual_kbd));
     EvDevInterceptor interceptor;
     pollfd pfd{.fd = fd, .events = POLLIN, .revents = 0};
+    std::vector<input_event> events_to_send; // for reuse, avoiding allocation in a hot loop
+    events_to_send.reserve(16);
     while (!token.stop_requested()) {
         const int n = poll(&pfd, 1, 1000);
         if (n < 0) {
@@ -212,8 +214,9 @@ void process_key(
             switch (err) {
             case LIBEVDEV_READ_STATUS_SUCCESS: {
                 if (ev.type == EV_KEY) {
-                    auto events = interceptor.process_evdev_key(cur_active_window, ev);
-                    for (const auto& ev : events) {
+                    events_to_send.clear();
+                    interceptor.process_evdev_key(cur_active_window, ev, events_to_send);
+                    for (const auto& ev : events_to_send) {
                         libevdev_uinput_write_event(virtual_kbd, ev.type, ev.code, ev.value);
                     }
                     libevdev_uinput_write_event(virtual_kbd, EV_SYN, SYN_REPORT, 0);
