@@ -18,15 +18,15 @@ std::tuple<ModMask, u16> user_key_map(const Arc<Window>& active_window, ModMask 
     if ((win = active_window.get()) != nullptr && is_terminal_emulator(*win)) {
         switch (mods) {
         case LEFT_ALT:
-            if (evdev_key == KEY_C) {
+            switch (evdev_key) {
+            case KEY_C:
                 return std::make_tuple(static_cast<Mod>(LEFT_CTRL | LEFT_SHIFT), KEY_C);
-            }
-            if (evdev_key == KEY_X) {
+            case KEY_X:
                 return std::make_tuple(static_cast<Mod>(LEFT_CTRL | LEFT_SHIFT), KEY_X);
-            }
-            if (evdev_key == KEY_V) {
+            case KEY_V:
                 return std::make_tuple(static_cast<Mod>(LEFT_CTRL | LEFT_SHIFT), KEY_V);
             }
+            break;
         }
     } else {
         switch (mods) {
@@ -63,6 +63,7 @@ std::tuple<ModMask, u16> user_key_map(const Arc<Window>& active_window, ModMask 
             case KEY_F: // find all
                 return std::make_tuple(LEFT_CTRL | LEFT_SHIFT, KEY_F);
             }
+            break;
         }
         }
     }

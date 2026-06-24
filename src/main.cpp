@@ -153,6 +153,7 @@ void process_key(
         LOG_ERROR("failed to init libevdev: {}", err);
         return;
     }
+    DEFER(libevdev_free(kbd));
     LOG_INFO("input device name: {}", libevdev_get_name(kbd));
     bool is_keyboard = libevdev_has_event_type(kbd, EV_KEY) &&        //
                        libevdev_has_event_code(kbd, EV_KEY, KEY_M) && //
@@ -174,11 +175,13 @@ void process_key(
     }
     DEFER(libevdev_grab(kbd, LIBEVDEV_UNGRAB));
     const int uinput_fd = open("/dev/uinput", O_RDWR);
-    libevdev_uinput* virtual_kbd;
+    DEFER(close(uinput_fd));
+    libevdev_uinput* virtual_kbd = nullptr;
     if ((err = libevdev_uinput_create_from_device(kbd, uinput_fd, &virtual_kbd)) != 0) {
         LOG_ERROR("cannot create virtual keyboard: {}", err);
         return;
     }
+    DEFER(libevdev_uinput_destroy(virtual_kbd));
     EvDevInterceptor interceptor;
     pollfd pfd{.fd = fd, .events = POLLIN, .revents = 0};
     while (!token.stop_requested()) {
@@ -233,7 +236,7 @@ void print_help() {
 }
 
 int main(int argc, const char* argv[]) {
-    if (std::strcmp(argv[1], "--help") == 0 || std::strcmp(argv[1], "-h") == 0) {
+    if (argc == 2 && (std::strcmp(argv[1], "--help") == 0 || std::strcmp(argv[1], "-h") == 0)) {
         print_help();
         return 0;
     }

@@ -1,8 +1,6 @@
 #pragma once
 #include "def.h"
 
-#include <cstdint>
-
 typedef u16 ModMask;
 
 enum Mod : u16 {

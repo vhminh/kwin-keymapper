@@ -1,6 +1,5 @@
 #pragma once
 
-#include "config.h"
 #include "kb.h"
 #include "window.h"
 
