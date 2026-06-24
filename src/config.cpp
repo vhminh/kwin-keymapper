@@ -50,10 +50,6 @@ std::tuple<ModMask, u16> user_key_map(const Arc<Window>& active_window, ModMask 
                 return std::make_tuple(LEFT_CTRL, KEY_T);
             case KEY_W: // close tab
                 return std::make_tuple(LEFT_CTRL, KEY_W);
-            case KEY_N: // next
-                return std::make_tuple(NONE, KEY_DOWN);
-            case KEY_P: // previous
-                return std::make_tuple(NONE, KEY_UP);
             }
             break;
         case LEFT_ALT | LEFT_SHIFT: {
@@ -62,6 +58,15 @@ std::tuple<ModMask, u16> user_key_map(const Arc<Window>& active_window, ModMask 
                 return std::make_tuple(LEFT_CTRL | LEFT_SHIFT, KEY_Z);
             case KEY_F: // find all
                 return std::make_tuple(LEFT_CTRL | LEFT_SHIFT, KEY_F);
+            }
+            break;
+        }
+        case LEFT_CTRL: {
+            switch (evdev_key) {
+            case KEY_N: // next
+                return std::make_tuple(NONE, KEY_DOWN);
+            case KEY_P: // previous
+                return std::make_tuple(NONE, KEY_UP);
             }
             break;
         }
