@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <format>
 #include <iostream>
+#include <unistd.h>
 
 #define COLOR_RESET "\033[0m"
 #define COLOR_RED "\033[31m"
@@ -26,5 +27,11 @@
 #define TODO(fmt, ...)                                                                                                 \
     do {                                                                                                               \
         LOG_ERROR("TODO(" __FILE__ ":{}): " fmt, __LINE__ __VA_OPT__(, ) __VA_ARGS__);                                 \
+        std::abort();                                                                                                  \
+    } while (0)
+
+#define UNREACHABLE(fmt, ...)                                                                                          \
+    do {                                                                                                               \
+        LOG_ERROR("UNREACHABLE(" __FILE__ ":{}): " fmt, __LINE__ __VA_OPT__(, ) __VA_ARGS__);                          \
         std::abort();                                                                                                  \
     } while (0)

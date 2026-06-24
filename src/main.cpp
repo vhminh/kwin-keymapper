@@ -28,9 +28,6 @@
 #include <chrono>
 #endif
 
-template <typename T>
-using Arc = std::shared_ptr<T>;
-
 template <>
 struct std::formatter<DBusError> : std::formatter<std::string> {
     auto format(const DBusError& err, std::format_context& ctx) const {

@@ -1,9 +1,11 @@
 #pragma once
+#include "def.h"
+
 #include <cstdint>
 
-typedef uint32_t ModMask;
+typedef u16 ModMask;
 
-enum Mod : uint32_t {
+enum Mod : u16 {
     NONE = 0,
 
     LEFT_CTRL = 1 << 0,
@@ -14,4 +16,15 @@ enum Mod : uint32_t {
 
     LEFT_ALT = 1 << 4,
     RIGHT_ALT = 1 << 5,
+};
+
+constexpr Mod all_mods[] = {
+    LEFT_CTRL,
+    RIGHT_CTRL,
+
+    LEFT_SHIFT,
+    RIGHT_SHIFT,
+
+    LEFT_ALT,
+    RIGHT_ALT,
 };

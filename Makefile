@@ -13,6 +13,7 @@ SRCS := src/argparse.cpp \
 
 HDRS := src/argparse.h \
         src/config.h \
+        src/def.h \
         src/defer.h \
         src/intercept.h \
         src/kb.h \

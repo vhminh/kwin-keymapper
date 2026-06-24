@@ -1,12 +1,9 @@
 #pragma once
 
+#include "def.h"
 #include "kb.h"
 #include "window.h"
 
-#include <memory>
 #include <tuple>
 
-template <typename T>
-using Arc = std::shared_ptr<T>;
-
-std::tuple<Mod, int> user_key_map(const Arc<Window>& active_window, Mod mods, int evdev_key);
+std::tuple<ModMask, u16> user_key_map(const Arc<Window>& active_window, ModMask mods, u16 evdev_key);
