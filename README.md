@@ -1,5 +1,7 @@
 # kwin-keymapper
 
+Application specific keyboard remapper for KWin
+
 ## Install
 - Install the KWin script
 ```
@@ -14,6 +16,9 @@ make install
   </policy>
 </busconfig>
 ```
+
+## Configuration
+Edit your keymaps in [`src/config.cpp`](src/config.cpp), see `user_key_map()`
 
 ## Usage
 ```sh
