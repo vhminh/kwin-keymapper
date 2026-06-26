@@ -76,26 +76,25 @@ ModMask apply_event_to_mods(ModMask mask, const input_event& ev) {
     return mask;
 }
 
-std::tuple<ModMask, ModMask> apply_events_to_mods(
-    ModMask phys, ModMask virt, const input_event& in, const std::vector<input_event>& out
-) {
-    phys = apply_event_to_mods(phys, in);
-    for (const input_event& ev : out) {
-        virt = apply_event_to_mods(virt, ev);
+ModMask apply_events_to_mods(ModMask mask, const std::vector<input_event>& events) {
+    for (const input_event& ev : events) {
+        mask = apply_event_to_mods(mask, ev);
     }
-    return std::make_tuple(phys, virt);
+    return mask;
 }
 
 void EvDevInterceptor::process_evdev_key(
     const Arc<Window>& active_window, const input_event& ev, std::vector<input_event>& result
 ) {
+    this->phys_mods = apply_event_to_mods(this->phys_mods, ev);
     if (is_evdev_mod(ev.code)) {
         produce_mod_diff(this->virt_mods, this->phys_mods, ev.time, result);
-        result.push_back(ev);
     } else {
         auto [expected_virt_mods, expected_key] = user_key_map(active_window, phys_mods, ev.code);
         produce_mod_diff(this->virt_mods, expected_virt_mods, ev.time, result);
+        // TODO: produce diff for key code too, not just for mods
+        //       it's lucky that all the keymaps use the same alpha keys, just different mod :)
         result.push_back(input_event{.time = ev.time, .type = ev.type, .code = expected_key, .value = ev.value});
     }
-    std::tie(this->phys_mods, this->virt_mods) = apply_events_to_mods(this->phys_mods, this->virt_mods, ev, result);
+    this->virt_mods = apply_events_to_mods(this->virt_mods, result);
 }
