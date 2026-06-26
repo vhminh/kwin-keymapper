@@ -16,18 +16,21 @@ typedef std::variant<const char*, int, bool> ArgValue;
 struct ArgDef {
     std::string_view name;
     ArgType type;
+    std::string_view desc;
+    std::string_view example;
     bool required;
 };
 
 class ArgParser {
 public:
-    ArgParser();
+    ArgParser(std::string_view program);
 
     ArgParser& add_option(ArgDef def);
     // only supports optional positional argument at the end
     ArgParser& add_positional_argument(ArgDef def);
 
-    void print_help(std::ostream&);
+    bool should_print_help(int argc, const char* argv[]) const;
+    void print_help(std::ostream&) const;
 
     // @throws ArgParseException if the args can't be parsed
     void parse(int argc, const char* argv[]);
@@ -45,6 +48,8 @@ public:
     }
 
 private:
+    std::string_view program;
+
     std::map<std::string_view, ArgValue> options;
     std::map<std::string_view, ArgValue> positional_args;
 

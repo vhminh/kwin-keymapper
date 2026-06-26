@@ -1,18 +1,17 @@
 #include "argparse.h"
 
-#include "log.h"
-
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
 #include <format>
+#include <ostream>
 #include <variant>
 
 bool starts_with_double_dash(const char* arg) {
     return std::strncmp(arg, "--", 2) == 0;
 }
 
-ArgParser::ArgParser() {}
+ArgParser::ArgParser(std::string_view program) : program(program) {}
 
 ArgParser& ArgParser::add_option(ArgDef def) {
     this->option_defs[def.name] = def;
@@ -33,8 +32,98 @@ ArgParser& ArgParser::add_positional_argument(ArgDef def) {
     return *this;
 }
 
-void ArgParser::print_help(std::ostream& os) {
-    TODO("ArgParser::print_help");
+bool ArgParser::should_print_help(int argc, const char* argv[]) const {
+    return argc == 2 && (std::strcmp(argv[1], "--help") == 0 || std::strcmp(argv[1], "-h") == 0);
+}
+
+void ArgParser::print_help(std::ostream& os) const {
+    // USAGE
+    os << std::format("Usage: {}", this->program);
+    std::vector<ArgDef> required_options;
+    std::vector<ArgDef> non_required_options;
+    for (const auto& p : this->option_defs) {
+        const auto& def = p.second;
+        if (def.required)
+            required_options.push_back(def);
+        else
+            non_required_options.push_back(def);
+    }
+    if (!non_required_options.empty()) {
+        os << " [OPTIONS]";
+    }
+    for (const ArgDef& def : required_options) {
+        switch (def.type) {
+        case ArgType::BOOL:
+            os << std::format(" {}", def.name);
+            break;
+        case ArgType::STRING:
+            os << std::format(" {} str", def.name);
+            break;
+        case ArgType::INT:
+            os << std::format(" {} N", def.name);
+            break;
+        }
+    }
+    for (const auto& name : this->positional_arg_names) {
+        const auto& def = this->positional_arg_defs.find(name)->second;
+        if (def.required) {
+            os << std::format(" <{}>", def.name);
+        } else {
+            os << std::format(" [{}]", def.name);
+        }
+    }
+    os << std::endl;
+    os << std::endl;
+    // POSITIONAL ARGS
+    if (!this->positional_arg_defs.empty()) {
+        os << "Positional arguments:\n";
+        for (const auto& name : this->positional_arg_names) {
+            const auto& def = this->positional_arg_defs.find(name)->second;
+            os << std::format("  {}\t\t{}\n", def.name, def.desc);
+        }
+        os << std::endl;
+    }
+    // REQUIRED OPTIONS
+    if (!required_options.empty()) {
+        os << "Required options:\n";
+        for (const ArgDef& def : required_options) {
+            os << std::format("  {}\t\t{}\n", def.name, def.desc);
+        }
+        os << std::endl;
+    }
+    // OPTIONS
+    if (!non_required_options.empty()) {
+        os << "Options:\n";
+        for (const ArgDef& def : non_required_options) {
+            os << std::format("  {}\t\t{}\n", def.name, def.desc);
+        }
+        os << std::endl;
+    }
+    // EXAMPLE
+    os << std::format("Example: {}", this->program);
+    for (const auto& p : this->option_defs) {
+        const auto& def = p.second;
+        switch (def.type) {
+        case ArgType::BOOL:
+            os << std::format(" {}", def.name);
+            break;
+        case ArgType::STRING:
+            os << std::format(" {} \"{}\"", def.name, def.example);
+            break;
+        case ArgType::INT:
+            os << std::format(" {} {}", def.name, def.example);
+            break;
+        }
+    }
+    for (const auto& name : this->positional_arg_names) {
+        const auto& def = this->positional_arg_defs.find(name)->second;
+        if (def.required) {
+            os << std::format(" {}", def.example);
+        } else {
+            os << std::format(" {}", def.example);
+        }
+    }
+    os << std::endl;
 }
 
 void validate_required_options(

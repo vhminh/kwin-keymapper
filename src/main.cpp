@@ -239,37 +239,35 @@ void process_key(
     }
 }
 
-void print_help() {
-    std::cout << "Usage: sudo kwin-keymapper --dbus-addr $DBUS_SESSION_BUS_ADDRESS --device-file /dev/input/eventX"
-              << std::endl;
-}
-
 int main(int argc, const char* argv[]) {
-    if (argc == 2 && (std::strcmp(argv[1], "--help") == 0 || std::strcmp(argv[1], "-h") == 0)) {
-        print_help();
+    auto parser = ArgParser(argv[0])
+                      .add_option(
+                          ArgDef{
+                              .name = "--dbus-addr",
+                              .type = ArgType::STRING,
+                              .desc = "User session DBus address",
+                              .example = "$DBUS_SESSION_BUS_ADDRESS",
+                              .required = true,
+                          }
+                      )
+                      .add_option(
+                          ArgDef{
+                              .name = "--device-file",
+                              .type = ArgType::STRING,
+                              .desc = "Path to your keyboard input device file",
+                              .example = "/dev/input/event8",
+                              .required = true,
+                          }
+                      );
+    if (parser.should_print_help(argc, argv)) {
+        parser.print_help(std::cout);
         return 0;
     }
-    ArgParser parser;
-    parser
-        .add_option(
-            ArgDef{
-                .name = "--dbus-addr",
-                .type = ArgType::STRING,
-                .required = true,
-            }
-        )
-        .add_option(
-            ArgDef{
-                .name = "--device-file",
-                .type = ArgType::STRING,
-                .required = true,
-            }
-        );
     try {
         parser.parse(argc, argv);
     } catch (const ArgParseException& ex) {
         LOG_ERROR("error parsing arguments: {}", ex.what());
-        print_help();
+        parser.print_help(std::cerr);
         return 1;
     }
     const char* dbus_addr = parser.opt<const char*>("--dbus-addr");
