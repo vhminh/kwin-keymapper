@@ -249,39 +249,46 @@ int main(int argc, const char* argv[]) {
         print_help();
         return 0;
     }
-    std::map<std::string_view, const char*> opts;
+    ArgParser parser;
+    parser
+        .add_option(
+            ArgDef{
+                .name = "--dbus-addr",
+                .type = ArgType::STRING,
+                .required = true,
+            }
+        )
+        .add_option(
+            ArgDef{
+                .name = "--device-file",
+                .type = ArgType::STRING,
+                .required = true,
+            }
+        );
     try {
-        opts = parse_opts(argc, argv);
+        parser.parse(argc, argv);
     } catch (const ArgParseException& ex) {
         LOG_ERROR("error parsing arguments: {}", ex.what());
         print_help();
         return 1;
     }
-    if (!opts["--dbus-addr"]) {
-        LOG_ERROR("missing DBus address");
-        print_help();
-        return 1;
-    }
-    if (!opts["--device-file"]) {
-        LOG_ERROR("missing device file");
-        print_help();
-        return 1;
-    }
+    const char* dbus_addr = parser.opt<const char*>("--dbus-addr");
+    const char* device_file = parser.opt<const char*>("--device-file");
     LOG_INFO("KWin keymapper starting");
 #ifdef AUTO_EXIT
     LOG_INFO("AUTO_EXIT: true");
 #else
     LOG_INFO("AUTO_EXIT: false");
 #endif
-    LOG_INFO("DBus address: {}", opts["--dbus-addr"]);
-    LOG_INFO("Device file: {}", opts["--device-file"]);
+    LOG_INFO("DBus address: {}", dbus_addr);
+    LOG_INFO("Device file: {}", device_file);
 
     std::atomic<Arc<Window>> active_window;
     std::stop_source cancel;
     std::jthread t1([&]() {
         LOG_INFO("starting new thread to monitor DBus for active window change");
         try {
-            monitor_active_window(cancel.get_token(), opts["--dbus-addr"], active_window);
+            monitor_active_window(cancel.get_token(), dbus_addr, active_window);
             cancel.request_stop();
         } catch (...) {
             cancel.request_stop();
@@ -292,7 +299,7 @@ int main(int argc, const char* argv[]) {
     std::jthread t2([&]() {
         LOG_INFO("starting new thread to process evdev events");
         try {
-            process_key(cancel.get_token(), opts["--device-file"], active_window);
+            process_key(cancel.get_token(), device_file, active_window);
             cancel.request_stop();
         } catch (...) {
             cancel.request_stop();
