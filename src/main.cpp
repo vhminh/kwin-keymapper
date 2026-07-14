@@ -69,44 +69,46 @@ void monitor_active_window(
 
     // poll with 1000ms timeout so stop token is checked
     while (dbus_connection_read_write(conn, 1000) && !token.stop_requested()) {
-        DBusMessage* msg = dbus_connection_pop_message(conn);
-        if (msg == nullptr) {
-            continue;
-        }
-        DEFER(dbus_message_unref(msg));
+        DBusMessage* msg;
+        while ((msg = dbus_connection_pop_message(conn)) != nullptr) {
+            DEFER({
+                dbus_message_unref(msg);
+                msg = nullptr;
+            });
 
-        if (!dbus_message_is_method_call(msg, "io.github.vhminh.kwin_keymapper", "active_window_changed")) {
-            LOG_INFO(
-                "message doesn't match, interface: {}, type: {}, path: {}, dest: {}",
-                dbus_message_get_interface(msg),
-                dbus_message_get_type(msg),
-                dbus_message_get_path(msg),
-                dbus_message_get_destination(msg)
+            if (!dbus_message_is_method_call(msg, "io.github.vhminh.kwin_keymapper", "active_window_changed")) {
+                LOG_INFO(
+                    "message doesn't match, interface: {}, type: {}, path: {}, dest: {}",
+                    dbus_message_get_interface(msg),
+                    dbus_message_get_type(msg),
+                    dbus_message_get_path(msg),
+                    dbus_message_get_destination(msg)
+                );
+                continue;
+            }
+            char* win_class = nullptr;
+            char* win_name = nullptr;
+            char* win_caption = nullptr;
+            dbus_message_get_args(
+                msg,
+                &err,
+                DBUS_TYPE_STRING,
+                &win_class,
+                DBUS_TYPE_STRING,
+                &win_name,
+                DBUS_TYPE_STRING,
+                &win_caption,
+                DBUS_TYPE_INVALID
             );
-            continue;
-        }
-        char* win_class = nullptr;
-        char* win_name = nullptr;
-        char* win_caption = nullptr;
-        dbus_message_get_args(
-            msg,
-            &err,
-            DBUS_TYPE_STRING,
-            &win_class,
-            DBUS_TYPE_STRING,
-            &win_name,
-            DBUS_TYPE_STRING,
-            &win_caption,
-            DBUS_TYPE_INVALID
-        );
-        if (dbus_error_is_set(&err)) {
-            LOG_ERROR("error parsing message args: {}", err);
-            continue;
-        }
+            if (dbus_error_is_set(&err)) {
+                LOG_ERROR("error parsing message args: {}", err);
+                continue;
+            }
 
-        Arc<Window> newly_active = std::make_shared<Window>(win_class, win_name, win_caption);
-        active_window.store(newly_active);
-        LOG_INFO("window activated, class: {}, name: {}, caption: {}", win_class, win_name, win_caption);
+            Arc<Window> newly_active = std::make_shared<Window>(win_class, win_name, win_caption);
+            active_window.store(newly_active);
+            LOG_INFO("window activated, class: {}, name: {}, caption: {}", win_class, win_name, win_caption);
+        }
     }
 }
 
