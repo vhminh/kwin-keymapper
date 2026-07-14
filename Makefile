@@ -1,4 +1,4 @@
-.PHONY: all install run clean
+.PHONY: all install run clean fmt
 
 CXX := g++
 CXXFLAGS += -O2 -std=c++20 -Wall -Wextra -I src
@@ -30,6 +30,9 @@ install:
 
 run: $(TARGET)
 	./$(TARGET)
+
+fmt:
+	find src/ -type f \( -name "*.cpp" -o -name "*.h" -o -name "*.hpp" -o -name "*.cc" \) | xargs clang-format -i
 
 clean:
 	rm -f $(TARGET)
