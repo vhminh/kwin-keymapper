@@ -231,3 +231,20 @@ bool ArgParser::exist_opt(std::string_view name) {
 bool ArgParser::exist_positional_arg(std::string_view name) {
     return this->positional_args.contains(name);
 }
+
+#include "test.h"
+TEST_CASE("parse 1 string option") {
+    auto parser = ArgParser("hello").add_option(
+        ArgDef{
+            .name = "--name",
+            .type = ArgType::STRING,
+            .desc = "The name to greet",
+            .example = "M",
+            .required = false,
+        }
+    );
+    int argc = 3;
+    const char* argv[] = {"hello", "--name", "Minh"};
+    parser.parse(argc, argv);
+    assert(strcmp(parser.opt<const char*>("--name"), "Minh") == 0);
+}

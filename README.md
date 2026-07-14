@@ -23,12 +23,12 @@ Edit your keymaps in [`src/config.cpp`](src/config.cpp), see `user_key_map()`
 ## Usage
 ```sh
 make clean
-make && sudo ./kwin-keymapper --dbus-addr $DBUS_SESSION_BUS_ADDRESS --device-file /dev/input/eventX
+make && sudo out/kwin-keymapper --dbus-addr $DBUS_SESSION_BUS_ADDRESS --device-file /dev/input/eventX
 ```
 
 ## Development
 ```sh
 make clean
-rm -rf compile_commands.json && CXXFLAGS=-DAUTO_EXIT bear -- make
-CXXFLAGS=-DAUTO_EXIT make && sudo ./kwin-keymapper --dbus-addr $DBUS_SESSION_BUS_ADDRESS --device-file /dev/input/eventX
+rm -rf compile_commands.json && CXXFLAGS=-DAUTO_EXIT bear -- make all
+CXXFLAGS=-DAUTO_EXIT make && sudo out/kwin-keymapper --dbus-addr $DBUS_SESSION_BUS_ADDRESS --device-file /dev/input/eventX
 ```

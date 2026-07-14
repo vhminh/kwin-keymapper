@@ -6,7 +6,6 @@
 
 #include <argp.h>
 #include <atomic>
-#include <cstring>
 #include <dbus/dbus.h>
 #include <fcntl.h>
 #include <libevdev/libevdev-uinput.h>
