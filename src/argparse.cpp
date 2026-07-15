@@ -4,7 +4,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <format>
-#include <ostream>
+#include <iostream>
 #include <variant>
 
 bool starts_with_double_dash(const char* arg) {
@@ -216,6 +216,29 @@ void ArgParser::parse(int argc, const char* argv[]) {
                     std::format("expect {} args, but found {}", this->positional_arg_defs.size(), argv[i])
                 );
             }
+            std::string_view name = this->positional_arg_names[positional_arg_idx++];
+            ArgDef def = this->positional_arg_defs[name];
+            switch (def.type) {
+            case ArgType::BOOL:
+                if (strcmp(argv[i], "true") == 0) {
+                    positional_args[name] = true;
+                } else if (strcmp(argv[i], "false") == 0) {
+                    positional_args[name] = false;
+                } else {
+                    throw ArgParseException(std::format("expect bool value but found {}", argv[i]));
+                }
+                break;
+            case ArgType::STRING:
+                positional_args[name] = argv[i];
+                break;
+            case ArgType::INT:
+                try {
+                    positional_args[name] = std::stoi(argv[i]);
+                } catch (const std::invalid_argument& e) {
+                    throw ArgParseException(std::format("expect int value but found {}", argv[i]));
+                }
+                break;
+            }
         }
     }
     validate_required_options(this->option_defs, options);
@@ -265,4 +288,127 @@ TEST_CASE("parse 1 bool option") {
 
     ASSERT_TRUE(parser.exist_opt("--version"));
     ASSERT_TRUE(parser.opt<bool>("--version"));
+}
+
+TEST_CASE("parse 1 int option") {
+    auto parser = ArgParser("square").add_option(
+        ArgDef{
+            .name = "--num",
+            .type = ArgType::INT,
+            .desc = "Number to square",
+            .example = "4",
+        }
+    );
+    const char* argv[] = {"square", "--num", "4"};
+    int argc = sizeof(argv) / sizeof(const char*);
+    parser.parse(argc, argv);
+
+    ASSERT_TRUE(parser.exist_opt("--num"));
+    ASSERT_EQ(parser.opt<int>("--num"), 4);
+}
+
+TEST_CASE("parse 1 positional arg") {
+    auto parser = ArgParser("ls").add_positional_argument(
+        ArgDef{
+            .name = "dir",
+            .type = ArgType::STRING,
+            .desc = "Directory",
+            .example = "folder",
+        }
+    );
+    const char* argv[] = {"ls", "folder"};
+    int argc = sizeof(argv) / sizeof(const char*);
+    parser.parse(argc, argv);
+
+    ASSERT_TRUE(parser.exist_positional_arg("dir"));
+    ASSERT_EQ(std::string_view(parser.positional_arg<const char*>("dir")), "folder");
+}
+
+TEST_CASE("parse 2 positional args") {
+    auto parser = ArgParser("add")
+                      .add_positional_argument(
+                          ArgDef{
+                              .name = "num1",
+                              .type = ArgType::INT,
+                              .desc = "First number",
+                              .example = "12",
+                          }
+                      )
+                      .add_positional_argument(
+
+                          ArgDef{
+                              .name = "num2",
+                              .type = ArgType::INT,
+                              .desc = "Second number",
+                              .example = "13",
+                          }
+                      );
+    const char* argv[] = {"add", "12", "13"};
+    int argc = sizeof(argv) / sizeof(const char*);
+    parser.parse(argc, argv);
+
+    ASSERT_TRUE(parser.exist_positional_arg("num1"));
+    ASSERT_EQ(parser.positional_arg<int>("num1"), 12);
+    ASSERT_TRUE(parser.exist_positional_arg("num2"));
+    ASSERT_EQ(parser.positional_arg<int>("num2"), 13);
+}
+
+TEST_CASE("parse bool option before positional arg") {
+    auto parser = ArgParser("ls")
+                      .add_option(
+                          ArgDef{
+                              .name = "--hidden",
+                              .type = ArgType::BOOL,
+                              .desc = "Include hidden files",
+                              .example = "",
+                          }
+                      )
+                      .add_positional_argument(
+                          ArgDef{
+                              .name = "dir",
+                              .type = ArgType::STRING,
+                              .desc = "Directory",
+                              .example = "folder",
+                          }
+                      );
+    const char* argv[] = {"ls", "--hidden", "folder"};
+    int argc = sizeof(argv) / sizeof(const char*);
+    parser.parse(argc, argv);
+
+    ASSERT_TRUE(parser.exist_opt("--hidden"));
+    ASSERT_TRUE(parser.opt<bool>("--hidden"));
+    ASSERT_TRUE(parser.exist_positional_arg("dir"));
+    ASSERT_EQ(std::string_view(parser.positional_arg<const char*>("dir")), "folder");
+}
+
+TEST_CASE("parse our kwin-keymapper command") {
+    auto parser = ArgParser("kwin-keymapper")
+                      .add_option(
+                          ArgDef{
+                              .name = "--dbus-addr",
+                              .type = ArgType::STRING,
+                              .desc = "User session DBus address",
+                              .example = "$DBUS_SESSION_BUS_ADDRESS",
+                              .required = true,
+                          }
+                      )
+                      .add_option(
+                          ArgDef{
+                              .name = "--device-file",
+                              .type = ArgType::STRING,
+                              .desc = "Path to your keyboard input device file",
+                              .example = "/dev/input/event8",
+                              .required = true,
+                          }
+                      );
+    const char* argv[] = {
+        "kwin-keymapper", "--dbus-addr", "unix:path=/run/user/1000/bus", "--device-file", "/dev/input/event8"
+    };
+    int argc = sizeof(argv) / sizeof(const char*);
+    parser.parse(argc, argv);
+
+    ASSERT_TRUE(parser.exist_opt("--dbus-addr"));
+    ASSERT_EQ(std::string_view(parser.opt<const char*>("--dbus-addr")), "unix:path=/run/user/1000/bus");
+    ASSERT_TRUE(parser.exist_opt("--device-file"));
+    ASSERT_EQ(std::string_view(parser.opt<const char*>("--device-file")), "/dev/input/event8");
 }
