@@ -6,7 +6,6 @@
 #include <format>
 #include <iostream>
 #include <sstream>
-#include <stdexcept>
 #include <string_view>
 #include <vector>
 
@@ -148,9 +147,9 @@ private:
 #define TEST_CASE(name) TEST_CASE_WITH_ID(name, __COUNTER__)
 #define TEST_CASE_WITH_ID(name, id) TEST_CASE_IMPL(name, id)
 #define TEST_CASE_IMPL(name, id) [[maybe_unused]] static void test_case_##id()
-#define ASSERT_EQ(a, b) 66
-#define ASSERT_NEQ(a, b) 66
-#define ASSERT_TRUE(b) 66
+#define ASSERT_EQ(a, b) (void)66
+#define ASSERT_NEQ(a, b) (void)66
+#define ASSERT_TRUE(b) (void)66
 #endif
 
 } // namespace test
