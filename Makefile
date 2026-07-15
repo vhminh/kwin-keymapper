@@ -26,10 +26,10 @@ TARGET := $(OUT_DIR)/kwin-keymapper
 
 TEST_TARGET := $(OUT_DIR)/test
 
-$(TARGET): setup $(HDRS) $(SRCS) src/main.cpp
+$(TARGET): $(HDRS) $(SRCS) src/main.cpp
 	$(CXX) $(SRCS) $(CXXFLAGS) src/main.cpp -o $(TARGET) $(LDLIBS)
 
-$(TEST_TARGET): setup $(HDRS) $(SRCS) src/test.cpp
+$(TEST_TARGET): $(HDRS) $(SRCS) src/test.cpp
 	$(CXX) $(SRCS) $(CXXFLAGS) -DTEST src/test.cpp -o $(TEST_TARGET) $(LDLIBS)
 
 install:
@@ -48,7 +48,7 @@ fmt:
 	find src/ -type f \( -name "*.cpp" -o -name "*.h" -o -name "*.hpp" -o -name "*.cc" \) | xargs clang-format -i
 
 clean:
-	rm -rf $(OUT_DIR)
+	git clean -fdx $(OUT_DIR)
 
 all: $(TARGET) $(TEST_TARGET)
 
