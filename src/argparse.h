@@ -18,7 +18,7 @@ struct ArgDef {
     ArgType type;
     std::string_view desc;
     std::string_view example;
-    bool required;
+    bool required{false};
 };
 
 class ArgParser {

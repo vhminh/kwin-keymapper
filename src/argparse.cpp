@@ -240,11 +240,29 @@ TEST_CASE("parse 1 string option") {
             .type = ArgType::STRING,
             .desc = "The name to greet",
             .example = "M",
-            .required = false,
         }
     );
-    int argc = 3;
     const char* argv[] = {"hello", "--name", "Minh"};
+    int argc = sizeof(argv) / sizeof(const char*);
     parser.parse(argc, argv);
-    assert(strcmp(parser.opt<const char*>("--name"), "Minh") == 0);
+
+    ASSERT_TRUE(parser.exist_opt("--name"));
+    ASSERT_EQ(std::string_view(parser.opt<const char*>("--name")), "Minh");
+}
+
+TEST_CASE("parse 1 bool option") {
+    auto parser = ArgParser("hello").add_option(
+        ArgDef{
+            .name = "--version",
+            .type = ArgType::BOOL,
+            .desc = "Get version",
+            .example = "",
+        }
+    );
+    const char* argv[] = {"hello", "--version"};
+    int argc = sizeof(argv) / sizeof(const char*);
+    parser.parse(argc, argv);
+
+    ASSERT_TRUE(parser.exist_opt("--version"));
+    ASSERT_TRUE(parser.opt<bool>("--version"));
 }
