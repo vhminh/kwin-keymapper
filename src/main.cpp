@@ -122,22 +122,21 @@ bool any_key_pressed(libevdev* dev) {
     return false;
 }
 
-bool wait_until_all_keys_released(libevdev* dev) {
+int wait_until_all_keys_released(libevdev* dev) {
     int tries = 20;
     while (tries-- > 0) {
         input_event ev;
         int err = libevdev_next_event(dev, LIBEVDEV_READ_FLAG_NORMAL, &ev);
         if (err < 0 && err != -EAGAIN) {
-            LOG_ERROR("error reading next event: {}", err);
-            return true;
+            return err;
         }
         if (!any_key_pressed(dev)) {
-            return true;
+            return 0;
         }
         using namespace std::chrono_literals;
         std::this_thread::sleep_for(100ms);
     }
-    return false;
+    return 1;
 }
 
 void process_key(
@@ -167,8 +166,12 @@ void process_key(
         LOG_ERROR("device is not a keyboard");
         return;
     }
-    if (!wait_until_all_keys_released(kbd)) {
-        LOG_ERROR("get your hands off the keyboard, lol");
+    if ((err = wait_until_all_keys_released(kbd)) != 0) {
+        if (err < 0) {
+            LOG_ERROR("error reading next evdev event: {}", err);
+        } else {
+            LOG_ERROR("get your hands off the keyboard, lol");
+        }
         return;
     }
     if ((err = libevdev_grab(kbd, LIBEVDEV_GRAB)) != 0) {
