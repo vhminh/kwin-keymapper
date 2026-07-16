@@ -247,11 +247,11 @@ void ArgParser::parse(int argc, const char* argv[]) {
     this->positional_args = positional_args;
 }
 
-bool ArgParser::exist_opt(std::string_view name) {
+bool ArgParser::exist_opt(std::string_view name) const {
     return this->options.contains(name);
 }
 
-bool ArgParser::exist_positional_arg(std::string_view name) {
+bool ArgParser::exist_positional_arg(std::string_view name) const {
     return this->positional_args.contains(name);
 }
 

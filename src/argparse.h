@@ -35,16 +35,16 @@ public:
     // @throws ArgParseException if the args can't be parsed
     void parse(int argc, const char* argv[]);
 
-    bool exist_opt(std::string_view name);
-    bool exist_positional_arg(std::string_view name);
-    template <class T> T opt(std::string_view name) {
+    bool exist_opt(std::string_view name) const;
+    bool exist_positional_arg(std::string_view name) const;
+    template <class T> T opt(std::string_view name) const {
         static_assert(std::is_same_v<T, bool> || std::is_same_v<T, const char*> || std::is_same_v<T, int>);
-        return std::get<T>(this->options[name]);
+        return std::get<T>(this->options.at(name));
     }
     template <class T>
-    T positional_arg(std::string_view name) {
+    T positional_arg(std::string_view name) const {
         static_assert(std::is_same_v<T, bool> || std::is_same_v<T, const char*> || std::is_same_v<T, int>);
-        return std::get<T>(this->positional_args[name]);
+        return std::get<T>(this->positional_args.at(name));
     }
 
 private:
