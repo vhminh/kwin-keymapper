@@ -6,4 +6,4 @@
 
 #include <tuple>
 
-std::tuple<ModMask, u16> user_key_map(const Arc<Window>& active_window, ModMask mods, u16 evdev_key);
+std::tuple<ModMask, u16> user_key_map(const Box<Window>& active_window, ModMask mods, u16 evdev_key);

@@ -84,7 +84,7 @@ ModMask apply_events_to_mods(ModMask mask, const std::vector<input_event>& event
 }
 
 void KeyMapper::process_evdev_key(
-    const Arc<Window>& active_window, const input_event& ev, std::vector<input_event>& result
+    const Box<Window>& active_window, const input_event& ev, std::vector<input_event>& result
 ) {
     this->phys_mods = apply_event_to_mods(this->phys_mods, ev);
     if (is_evdev_mod(ev.code)) {
