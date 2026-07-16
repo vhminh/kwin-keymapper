@@ -7,7 +7,7 @@ on:
     branches: ["master"]
 
 jobs:
-  build:
+  ci:
     runs-on: ubuntu-latest
 
     steps:
@@ -15,18 +15,12 @@ jobs:
       - name: Install deps
         run: |
           sudo apt update
-          sudo apt install libevdev-dev libdbus-1-dev
+          sudo apt install clang-format libevdev-dev libdbus-1-dev
+      - name: Format check
+        run: |
+          make fmt
+          git diff --exit-code
       - name: Build
         run: make
-
-  test:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v7
-      - name: Install deps
-        run: |
-          sudo apt update
-          sudo apt install libevdev-dev libdbus-1-dev
       - name: Test
         run: make test
