@@ -36,9 +36,39 @@ struct std::formatter<DBusError> : std::formatter<std::string> {
     }
 };
 
-void monitor_active_window(
-    const std::stop_token& token, const char* dbus_addr, std::atomic<Arc<Window>>& active_window
-) {
+bool any_key_pressed(libevdev* dev) {
+    for (int key = 0; key < KEY_MAX; ++key) {
+        if (libevdev_has_event_code(dev, EV_KEY, key)) {
+            if (libevdev_get_event_value(dev, EV_KEY, key) != 0) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+int wait_until_all_keys_released(libevdev* dev) {
+    int tries = 20;
+    while (tries-- > 0) {
+        input_event ev;
+        int err = libevdev_next_event(dev, LIBEVDEV_READ_FLAG_NORMAL, &ev);
+        if (err < 0 && err != -EAGAIN) {
+            return err;
+        }
+        if (!any_key_pressed(dev)) {
+            return 0;
+        }
+        using namespace std::chrono_literals;
+        std::this_thread::sleep_for(100ms);
+    }
+    return 1;
+}
+
+void loop(const char* dbus_addr, const char* kb_device_file) {
+#ifdef AUTO_EXIT
+    const auto start_time = std::chrono::steady_clock::now();
+#endif
+    // SETUP DBUS
     DBusError err;
     dbus_error_init(&err);
     DEFER(dbus_error_free(&err));
@@ -65,9 +95,102 @@ void monitor_active_window(
         LOG_ERROR("not DBus name primary owner: {}", ret);
         return;
     }
+    int dbus_fd;
+    if (!dbus_connection_get_unix_fd(conn, &dbus_fd)) {
+        LOG_ERROR("cannot get dbus connection Unix fd");
+        return;
+    }
 
-    // poll with 1000ms timeout so stop token is checked
-    while (dbus_connection_read_write(conn, 1000) && !token.stop_requested()) {
+    // SETUP KEY GRAB AND VIRT KEYBOARD
+    const int kbd_fd = open(kb_device_file, O_RDONLY | O_NONBLOCK);
+    if (kbd_fd == -1) {
+        LOG_ERROR("failed to open device file {}", kb_device_file);
+        return;
+    }
+    DEFER(close(kbd_fd));
+    libevdev* kbd = nullptr;
+    int rc;
+    if ((rc = libevdev_new_from_fd(kbd_fd, &kbd)) != 0) {
+        LOG_ERROR("failed to init libevdev: {}", rc);
+        return;
+    }
+    DEFER(libevdev_free(kbd));
+    LOG_INFO("input device name: {}", libevdev_get_name(kbd));
+    bool is_keyboard = libevdev_has_event_type(kbd, EV_KEY) &&        //
+                       libevdev_has_event_code(kbd, EV_KEY, KEY_M) && //
+                       libevdev_has_event_code(kbd, EV_KEY, KEY_I) && //
+                       libevdev_has_event_code(kbd, EV_KEY, KEY_N) && //
+                       libevdev_has_event_code(kbd, EV_KEY, KEY_H) && //
+                       libevdev_has_event_code(kbd, EV_KEY, KEY_ENTER);
+    if (!is_keyboard) {
+        LOG_ERROR("device is not a keyboard");
+        return;
+    }
+    if ((rc = wait_until_all_keys_released(kbd)) != 0) {
+        if (rc < 0) {
+            LOG_ERROR("error reading next evdev event: {}", err);
+        } else {
+            LOG_ERROR("get your hands off the keyboard, lol");
+        }
+        return;
+    }
+    if ((rc = libevdev_grab(kbd, LIBEVDEV_GRAB)) != 0) {
+        LOG_ERROR("error grabing device fd: {}", rc);
+        return;
+    }
+    DEFER(libevdev_grab(kbd, LIBEVDEV_UNGRAB));
+    const int uinput_fd = open("/dev/uinput", O_RDWR);
+    if (uinput_fd == -1) {
+        LOG_ERROR("failed to open /dev/uinput");
+        return;
+    }
+    DEFER(close(uinput_fd));
+    libevdev_uinput* virtual_kbd = nullptr;
+    if ((rc = libevdev_uinput_create_from_device(kbd, uinput_fd, &virtual_kbd)) != 0) {
+        LOG_ERROR("cannot create virtual keyboard: {}", rc);
+        return;
+    }
+    DEFER(libevdev_uinput_destroy(virtual_kbd));
+
+    // MAIN LOOP
+    KeyMapper keymapper;
+    std::atomic<Arc<Window>> active_window;
+    std::vector<input_event> events_to_send; // for reuse, avoiding allocation in a hot loop
+    events_to_send.reserve(16);
+    pollfd poll_fds[2] = {
+        pollfd{.fd = dbus_fd, .events = POLLIN, .revents = 0}, pollfd{.fd = kbd_fd, .events = POLLIN, .revents = 0}
+    };
+    while (true) {
+#ifdef AUTO_EXIT
+        auto elapsed_duration = std::chrono::steady_clock::now() - start_time;
+        using namespace std::chrono_literals;
+        if (elapsed_duration > 6000ms) {
+            LOG_INFO("auto exit");
+            return;
+        }
+#endif
+        const int n = poll(poll_fds, 2, 1000);
+        if (n < 0) {
+            LOG_ERROR("poll error: {}", n);
+            return;
+        }
+        if (poll_fds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+            LOG_ERROR("poll DBus revents error: {}", poll_fds[0].revents);
+            return;
+        }
+        if (poll_fds[1].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+            LOG_ERROR("poll evdev revents error: {}", poll_fds[1].revents);
+            return;
+        }
+        if (n == 0) {
+            continue;
+        }
+
+        // PROCESS DBUS MESSAGES
+        if (!dbus_connection_read_write(conn, 0)) { // non blocking read
+            LOG_ERROR("cannot read messages from DBus connection");
+            return;
+        }
         DBusMessage* msg;
         while ((msg = dbus_connection_pop_message(conn)) != nullptr) {
             DEFER({
@@ -108,114 +231,16 @@ void monitor_active_window(
             active_window.store(newly_active);
             LOG_INFO("window activated, class: {}, name: {}, caption: {}", win_class, win_name, win_caption);
         }
-    }
-}
 
-bool any_key_pressed(libevdev* dev) {
-    for (int key = 0; key < KEY_MAX; ++key) {
-        if (libevdev_has_event_code(dev, EV_KEY, key)) {
-            if (libevdev_get_event_value(dev, EV_KEY, key) != 0) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-int wait_until_all_keys_released(libevdev* dev) {
-    int tries = 20;
-    while (tries-- > 0) {
-        input_event ev;
-        int err = libevdev_next_event(dev, LIBEVDEV_READ_FLAG_NORMAL, &ev);
-        if (err < 0 && err != -EAGAIN) {
-            return err;
-        }
-        if (!any_key_pressed(dev)) {
-            return 0;
-        }
-        using namespace std::chrono_literals;
-        std::this_thread::sleep_for(100ms);
-    }
-    return 1;
-}
-
-void process_key(
-    const std::stop_token& token, const char* kb_device_file, const std::atomic<Arc<Window>>& active_window
-) {
-    const int fd = open(kb_device_file, O_RDONLY | O_NONBLOCK);
-    if (fd == -1) {
-        LOG_ERROR("failed to open device file {}", kb_device_file);
-        return;
-    }
-    DEFER(close(fd));
-    libevdev* kbd = nullptr;
-    int err;
-    if ((err = libevdev_new_from_fd(fd, &kbd)) != 0) {
-        LOG_ERROR("failed to init libevdev: {}", err);
-        return;
-    }
-    DEFER(libevdev_free(kbd));
-    LOG_INFO("input device name: {}", libevdev_get_name(kbd));
-    bool is_keyboard = libevdev_has_event_type(kbd, EV_KEY) &&        //
-                       libevdev_has_event_code(kbd, EV_KEY, KEY_M) && //
-                       libevdev_has_event_code(kbd, EV_KEY, KEY_I) && //
-                       libevdev_has_event_code(kbd, EV_KEY, KEY_N) && //
-                       libevdev_has_event_code(kbd, EV_KEY, KEY_H) && //
-                       libevdev_has_event_code(kbd, EV_KEY, KEY_ENTER);
-    if (!is_keyboard) {
-        LOG_ERROR("device is not a keyboard");
-        return;
-    }
-    if ((err = wait_until_all_keys_released(kbd)) != 0) {
-        if (err < 0) {
-            LOG_ERROR("error reading next evdev event: {}", err);
-        } else {
-            LOG_ERROR("get your hands off the keyboard, lol");
-        }
-        return;
-    }
-    if ((err = libevdev_grab(kbd, LIBEVDEV_GRAB)) != 0) {
-        LOG_ERROR("error grabing device fd: {}", err);
-        return;
-    }
-    DEFER(libevdev_grab(kbd, LIBEVDEV_UNGRAB));
-    const int uinput_fd = open("/dev/uinput", O_RDWR);
-    if (uinput_fd == -1) {
-        LOG_ERROR("failed to open /dev/uinput");
-        return;
-    }
-    DEFER(close(uinput_fd));
-    libevdev_uinput* virtual_kbd = nullptr;
-    if ((err = libevdev_uinput_create_from_device(kbd, uinput_fd, &virtual_kbd)) != 0) {
-        LOG_ERROR("cannot create virtual keyboard: {}", err);
-        return;
-    }
-    DEFER(libevdev_uinput_destroy(virtual_kbd));
-    KeyMapper keymapper;
-    pollfd pfd{.fd = fd, .events = POLLIN, .revents = 0};
-    std::vector<input_event> events_to_send; // for reuse, avoiding allocation in a hot loop
-    events_to_send.reserve(16);
-    while (!token.stop_requested()) {
-        const int n = poll(&pfd, 1, 1000);
-        if (n < 0) {
-            LOG_ERROR("poll error: {}", n);
-            return;
-        }
-        if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
-            LOG_ERROR("poll revents error: {}", pfd.revents);
-            return;
-        }
-        if (n == 0) {
-            continue;
-        }
-        input_event ev;
+        // PROCESS EVDEV EVENTS
         Arc<Window> cur_active_window = active_window.load(); // atomic load once per poll wakeup
+        input_event ev;
         do {
-            err = libevdev_next_event(kbd, LIBEVDEV_READ_FLAG_NORMAL, &ev);
-            if (err == -EAGAIN) {
+            rc = libevdev_next_event(kbd, LIBEVDEV_READ_FLAG_NORMAL, &ev);
+            if (rc == -EAGAIN) {
                 break;
             }
-            switch (err) {
+            switch (rc) {
             case LIBEVDEV_READ_STATUS_SUCCESS: {
                 if (ev.type == EV_KEY) {
                     events_to_send.clear();
@@ -239,7 +264,7 @@ void process_key(
                 return;
             }
             }
-        } while (!token.stop_requested() && (err == LIBEVDEV_READ_STATUS_SUCCESS || err == LIBEVDEV_READ_STATUS_SYNC));
+        } while (rc == LIBEVDEV_READ_STATUS_SUCCESS || rc == LIBEVDEV_READ_STATUS_SYNC);
     }
 }
 
@@ -285,41 +310,7 @@ int main(int argc, const char* argv[]) {
     LOG_INFO("DBus address: {}", dbus_addr);
     LOG_INFO("Device file: {}", device_file);
 
-    std::atomic<Arc<Window>> active_window;
-    std::stop_source cancel;
-    std::jthread t1([&]() {
-        LOG_INFO("starting new thread to monitor DBus for active window change");
-        try {
-            monitor_active_window(cancel.get_token(), dbus_addr, active_window);
-            cancel.request_stop();
-        } catch (...) {
-            cancel.request_stop();
-            throw;
-        }
-        LOG_INFO("stopped monitoring active window thread");
-    });
-    std::jthread t2([&]() {
-        LOG_INFO("starting new thread to process evdev events");
-        try {
-            process_key(cancel.get_token(), device_file, active_window);
-            cancel.request_stop();
-        } catch (...) {
-            cancel.request_stop();
-            throw;
-        }
-        LOG_INFO("stopped processing evdev event thread");
-    });
-
-#ifdef AUTO_EXIT
-    {
-        using namespace std::chrono_literals;
-        std::this_thread::sleep_for(6000ms);
-        cancel.request_stop();
-    }
-#endif
-
-    t1.join();
-    t2.join();
+    loop(dbus_addr, device_file);
     LOG_INFO("KWin keymapper stopped");
     return 0;
 }
