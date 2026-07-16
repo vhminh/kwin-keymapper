@@ -1,10 +1,10 @@
 #include "argparse.h"
+#include "def.h"
 #include "defer.h"
-#include "intercept.h"
+#include "keymapper.h"
 #include "log.h"
 #include "window.h"
 
-#include <argp.h>
 #include <atomic>
 #include <dbus/dbus.h>
 #include <fcntl.h>
@@ -188,7 +188,7 @@ void process_key(
         return;
     }
     DEFER(libevdev_uinput_destroy(virtual_kbd));
-    EvDevInterceptor interceptor;
+    KeyMapper keymapper;
     pollfd pfd{.fd = fd, .events = POLLIN, .revents = 0};
     std::vector<input_event> events_to_send; // for reuse, avoiding allocation in a hot loop
     events_to_send.reserve(16);
@@ -216,7 +216,7 @@ void process_key(
             case LIBEVDEV_READ_STATUS_SUCCESS: {
                 if (ev.type == EV_KEY) {
                     events_to_send.clear();
-                    interceptor.process_evdev_key(cur_active_window, ev, events_to_send);
+                    keymapper.process_evdev_key(cur_active_window, ev, events_to_send);
                     for (const auto& ev : events_to_send) {
                         libevdev_uinput_write_event(virtual_kbd, ev.type, ev.code, ev.value);
                     }

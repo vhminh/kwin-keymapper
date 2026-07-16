@@ -1,11 +1,11 @@
-#include "intercept.h"
+#include "keymapper.h"
 
 #include "config.h"
 #include "log.h"
 
 #include <cassert>
 
-EvDevInterceptor::EvDevInterceptor() : phys_mods(0), virt_mods(0) {}
+KeyMapper::KeyMapper() : phys_mods(0), virt_mods(0) {}
 
 Mod evdev_to_mod(u16 evdev_key) {
     switch (evdev_key) {
@@ -83,7 +83,7 @@ ModMask apply_events_to_mods(ModMask mask, const std::vector<input_event>& event
     return mask;
 }
 
-void EvDevInterceptor::process_evdev_key(
+void KeyMapper::process_evdev_key(
     const Arc<Window>& active_window, const input_event& ev, std::vector<input_event>& result
 ) {
     this->phys_mods = apply_event_to_mods(this->phys_mods, ev);

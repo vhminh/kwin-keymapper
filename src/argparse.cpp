@@ -151,7 +151,7 @@ void validate_required_options(
     }
 }
 
-void valildate_required_positional_arguments(
+void validate_required_positional_arguments(
     const std::map<std::string_view, ArgDef>& positional_arg_defs,
     const std::vector<std::string_view>& positional_arg_names,
     const std::map<std::string_view, ArgValue>& positional_args
@@ -242,7 +242,7 @@ void ArgParser::parse(int argc, const char* argv[]) {
         }
     }
     validate_required_options(this->option_defs, options);
-    valildate_required_positional_arguments(this->positional_arg_defs, this->positional_arg_names, positional_args);
+    validate_required_positional_arguments(this->positional_arg_defs, this->positional_arg_names, positional_args);
     this->options = options;
     this->positional_args = positional_args;
 }
