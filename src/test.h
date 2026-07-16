@@ -4,6 +4,7 @@
 
 #include <cassert>
 #include <format>
+#include <fstream>
 #include <iostream>
 #include <sstream>
 #include <string_view>
@@ -24,9 +25,11 @@ public:
 
     void register_test_case(std::string_view name, void (*f)()) { test_cases.emplace_back(name, f); }
 
-    int run_tests() {
+    int run_tests(std::ofstream& gha_summary) {
         std::cerr << std::format("running {} test(s)\n", this->test_cases.size()) << std::endl;
         int passed = 0, failed = 0;
+        std::vector<std::pair<std::string_view, bool>> results;
+        results.reserve(this->test_cases.size());
         for (TestCase& test_case : this->test_cases) {
             std::cerr << test_case.name << " ... ";
             // capture stdout and stderr
@@ -41,9 +44,11 @@ public:
 
             if (ok) {
                 ++passed;
+                results.push_back(std::make_pair(test_case.name, true));
                 std::cerr << (isatty(STDERR_FILENO) ? (COLOR_GREEN "ok" COLOR_RESET) : "ok") << std::endl;
             } else {
                 ++failed;
+                results.push_back(std::make_pair(test_case.name, false));
                 std::cerr << (isatty(STDERR_FILENO) ? (COLOR_RED "FAILED" COLOR_RESET) : "FAILED") << std::endl;
                 std::cerr << "---- captured stdout ----" << std::endl;
                 std::cerr << captured_stdout.str() << std::endl;
@@ -53,6 +58,12 @@ public:
         }
         std::cerr << std::endl;
         std::cerr << std::format("{} passed, {} failed", passed, failed) << std::endl;
+        gha_summary << "## Test Summary" << std::endl << std::endl;
+        gha_summary << "| Status | Test Name |" << std::endl;
+        gha_summary << "| :---: | :--- |" << std::endl;
+        for (const auto& result : results) {
+            gha_summary << "| " << (result.second ? "✅" : "❌") << " | " << result.first << " |" << std::endl;
+        }
         if (failed > 0) {
             return 6;
         }
@@ -87,8 +98,8 @@ inline int register_test_case(std::string_view name, void (*f)()) {
     return 0;
 }
 
-inline int run_tests() {
-    return global_registry().run_tests();
+inline int run_tests(std::ofstream& gha_summary) {
+    return global_registry().run_tests(gha_summary);
 }
 
 class AssertionFailed : public std::exception {
