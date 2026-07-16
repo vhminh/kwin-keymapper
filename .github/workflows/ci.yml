@@ -11,22 +11,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
-      - name: install deps
+      - uses: actions/checkout@v7
+      - name: Install deps
         run: |
           sudo apt update
           sudo apt install libevdev-dev libdbus-1-dev
-      - name: build
+      - name: Build
         run: make
 
   test:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
-      - name: install deps
+      - uses: actions/checkout@v7
+      - name: Install deps
         run: |
           sudo apt update
           sudo apt install libevdev-dev libdbus-1-dev
-      - name: test
+      - name: Test
         run: make test
