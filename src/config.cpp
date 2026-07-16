@@ -20,11 +20,11 @@ std::tuple<ModMask, u16> user_key_map(const Arc<Window>& active_window, ModMask 
         case LEFT_ALT:
             switch (evdev_key) {
             case KEY_C:
-                return std::make_tuple(static_cast<Mod>(LEFT_CTRL | LEFT_SHIFT), KEY_C);
+                return std::make_tuple(static_cast<ModMask>(LEFT_CTRL | LEFT_SHIFT), KEY_C);
             case KEY_X:
-                return std::make_tuple(static_cast<Mod>(LEFT_CTRL | LEFT_SHIFT), KEY_X);
+                return std::make_tuple(static_cast<ModMask>(LEFT_CTRL | LEFT_SHIFT), KEY_X);
             case KEY_V:
-                return std::make_tuple(static_cast<Mod>(LEFT_CTRL | LEFT_SHIFT), KEY_V);
+                return std::make_tuple(static_cast<ModMask>(LEFT_CTRL | LEFT_SHIFT), KEY_V);
             }
             break;
         }
