@@ -8,16 +8,17 @@ on:
 
 jobs:
   ci:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
 
     steps:
       - uses: actions/checkout@v7
       - name: Install deps
         run: |
           sudo apt update
-          sudo apt install clang-format-21 libevdev-dev libdbus-1-dev
+          sudo apt install -y clang-format libevdev-dev libdbus-1-dev
       - name: Format check
         run: |
+          clang-format --version
           make fmt
           git diff --exit-code
       - name: Build
