@@ -5,7 +5,6 @@
 #include "log.h"
 #include "window.h"
 
-#include <atomic>
 #include <dbus/dbus.h>
 #include <fcntl.h>
 #include <libevdev/libevdev-uinput.h>
@@ -170,8 +169,11 @@ void loop(const char* dbus_addr, const char* kb_device_file) {
         }
 #endif
         const int n = poll(poll_fds, 2, 1000);
+        if (n == 0 || (n == -1 && errno == EINTR)) {
+            continue;
+        }
         if (n < 0) {
-            LOG_ERROR("poll error: {}", n);
+            LOG_ERROR("poll error: {}, errno: {}", n, errno);
             return;
         }
         if (poll_fds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
@@ -181,9 +183,6 @@ void loop(const char* dbus_addr, const char* kb_device_file) {
         if (poll_fds[1].revents & (POLLERR | POLLHUP | POLLNVAL)) {
             LOG_ERROR("poll evdev revents error: {}", poll_fds[1].revents);
             return;
-        }
-        if (n == 0) {
-            continue;
         }
 
         // PROCESS DBUS MESSAGES
