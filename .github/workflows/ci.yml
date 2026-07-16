@@ -12,7 +12,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - name: test
+      - name: install deps
+        run: |
+          sudo apt update
+          sudo apt install libevdev-dev libdbus-1-dev
+      - name: build
         run: make
 
   test:
@@ -20,5 +24,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - name: install deps
+        run: |
+          sudo apt update
+          sudo apt install libevdev-dev libdbus-1-dev
       - name: test
         run: make test
