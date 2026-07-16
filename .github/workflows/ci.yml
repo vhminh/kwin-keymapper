@@ -7,7 +7,7 @@ on:
     branches: ["master"]
 
 jobs:
-  ci:
+  test:
     runs-on: ubuntu-26.04
 
     steps:
