@@ -13,7 +13,7 @@ bool is_terminal_emulator(const Window& window) {
     return terminal_emulators.find(std::make_tuple(window.xclass, window.name)) != terminal_emulators.end();
 }
 
-std::tuple<ModMask, u16> user_key_map(const Arc<Window>& active_window, ModMask mods, u16 evdev_key) {
+std::tuple<ModMask, u16> user_key_map(const Box<Window>& active_window, ModMask mods, u16 evdev_key) {
     Window* win;
     if ((win = active_window.get()) != nullptr && is_terminal_emulator(*win)) {
         switch (mods) {

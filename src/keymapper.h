@@ -9,7 +9,7 @@
 class KeyMapper {
 public:
     KeyMapper();
-    void process_evdev_key(const Arc<Window>& active_window, const input_event&, std::vector<input_event>& result);
+    void process_evdev_key(const Box<Window>& active_window, const input_event&, std::vector<input_event>& result);
 
 private:
     ModMask phys_mods; // mods held on the physical keyboard

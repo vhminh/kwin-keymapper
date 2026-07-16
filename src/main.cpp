@@ -128,7 +128,7 @@ void loop(const char* dbus_addr, const char* kb_device_file) {
     }
     if ((rc = wait_until_all_keys_released(kbd)) != 0) {
         if (rc < 0) {
-            LOG_ERROR("error reading next evdev event: {}", err);
+            LOG_ERROR("error reading next evdev event: {}", rc);
         } else {
             LOG_ERROR("get your hands off the keyboard, lol");
         }
@@ -154,7 +154,7 @@ void loop(const char* dbus_addr, const char* kb_device_file) {
 
     // MAIN LOOP
     KeyMapper keymapper;
-    std::atomic<Arc<Window>> active_window;
+    Box<Window> active_window;
     std::vector<input_event> events_to_send; // for reuse, avoiding allocation in a hot loop
     events_to_send.reserve(16);
     pollfd poll_fds[2] = {
@@ -226,14 +226,11 @@ void loop(const char* dbus_addr, const char* kb_device_file) {
                 LOG_ERROR("error parsing message args: {}", err);
                 continue;
             }
-
-            Arc<Window> newly_active = std::make_shared<Window>(win_class, win_name, win_caption);
-            active_window.store(newly_active);
+            active_window = std::make_unique<Window>(win_class, win_name, win_caption);
             LOG_INFO("window activated, class: {}, name: {}, caption: {}", win_class, win_name, win_caption);
         }
 
         // PROCESS EVDEV EVENTS
-        Arc<Window> cur_active_window = active_window.load(); // atomic load once per poll wakeup
         input_event ev;
         do {
             rc = libevdev_next_event(kbd, LIBEVDEV_READ_FLAG_NORMAL, &ev);
@@ -244,7 +241,7 @@ void loop(const char* dbus_addr, const char* kb_device_file) {
             case LIBEVDEV_READ_STATUS_SUCCESS: {
                 if (ev.type == EV_KEY) {
                     events_to_send.clear();
-                    keymapper.process_evdev_key(cur_active_window, ev, events_to_send);
+                    keymapper.process_evdev_key(active_window, ev, events_to_send);
                     for (const auto& e : events_to_send) {
                         libevdev_uinput_write_event(virtual_kbd, e.type, e.code, e.value);
                     }
@@ -260,7 +257,7 @@ void loop(const char* dbus_addr, const char* kb_device_file) {
                 break;
             }
             default: {
-                LOG_ERROR("error reading next evdev event: {}", err);
+                LOG_ERROR("error reading next evdev event: {}", rc);
                 return;
             }
             }
