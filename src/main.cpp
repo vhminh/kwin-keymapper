@@ -245,8 +245,8 @@ void loop(const char* dbus_addr, const char* kb_device_file) {
                 if (ev.type == EV_KEY) {
                     events_to_send.clear();
                     keymapper.process_evdev_key(cur_active_window, ev, events_to_send);
-                    for (const auto& ev : events_to_send) {
-                        libevdev_uinput_write_event(virtual_kbd, ev.type, ev.code, ev.value);
+                    for (const auto& e : events_to_send) {
+                        libevdev_uinput_write_event(virtual_kbd, e.type, e.code, e.value);
                     }
                     libevdev_uinput_write_event(virtual_kbd, EV_SYN, SYN_REPORT, 0);
                 } else {
