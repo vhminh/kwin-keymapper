@@ -24,4 +24,4 @@ jobs:
       - name: Build
         run: make
       - name: Test
-        run: make test >> $GITHUB_STEP_SUMMARY
+        run: make test
