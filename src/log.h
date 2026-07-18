@@ -11,19 +11,19 @@
 #define COLOR_YELLOW "\033[33m"
 
 #define LOG_IMPL(level, color, fmt, ...)                                                                               \
-    std::cerr << std::format(color "[" level "]: " COLOR_RESET fmt "\n" __VA_OPT__(, ) __VA_ARGS__)
+    std::cerr << std::format(                                                                                          \
+        "{}[" level "]: {}" fmt "\n",                                                                                  \
+        isatty(STDERR_FILENO) ? (color) : "",                                                                          \
+        isatty(STDERR_FILENO) ? COLOR_RESET : "" __VA_OPT__(, ) __VA_ARGS__                                            \
+    )
 
 #define LOG_DEBUG(fmt, ...) LOG_IMPL("DEBUG", COLOR_RESET, fmt __VA_OPT__(, ) __VA_ARGS__)
 
 #define LOG_INFO(fmt, ...) LOG_IMPL("INFO", COLOR_RESET, fmt __VA_OPT__(, ) __VA_ARGS__)
 
-#define LOG_WARN(fmt, ...)                                                                                             \
-    isatty(STDERR_FILENO) ? LOG_IMPL("WARN", COLOR_YELLOW, fmt __VA_OPT__(, ) __VA_ARGS__) :                           \
-                            LOG_IMPL("WARN", COLOR_RESET, fmt __VA_OPT__(, ) __VA_ARGS__)
+#define LOG_WARN(fmt, ...) LOG_IMPL("WARN", COLOR_YELLOW, fmt __VA_OPT__(, ) __VA_ARGS__)
 
-#define LOG_ERROR(fmt, ...)                                                                                            \
-    isatty(STDERR_FILENO) ? LOG_IMPL("ERROR", COLOR_RED, fmt __VA_OPT__(, ) __VA_ARGS__) :                             \
-                            LOG_IMPL("ERROR", COLOR_RESET, fmt __VA_OPT__(, ) __VA_ARGS__)
+#define LOG_ERROR(fmt, ...) LOG_IMPL("ERROR", COLOR_RED, fmt __VA_OPT__(, ) __VA_ARGS__)
 
 #define TODO(fmt, ...)                                                                                                 \
     do {                                                                                                               \
