@@ -238,16 +238,26 @@ void loop(const char* dbus_addr, const char* kb_device_file) {
             }
             switch (rc) {
             case LIBEVDEV_READ_STATUS_SUCCESS: {
+                int write_err = 0;
                 if (ev.type == EV_KEY) {
                     events_to_send.clear();
                     keymapper.process_evdev_key(active_window, ev, events_to_send);
                     for (const auto& e : events_to_send) {
-                        libevdev_uinput_write_event(virtual_kbd, e.type, e.code, e.value);
+                        if ((write_err = libevdev_uinput_write_event(virtual_kbd, e.type, e.code, e.value)) != 0) {
+                            LOG_ERROR("libevdev_uinput_write_event error writing key: {}", write_err);
+                            return;
+                        }
                     }
-                    libevdev_uinput_write_event(virtual_kbd, EV_SYN, SYN_REPORT, 0);
+                    if ((write_err = libevdev_uinput_write_event(virtual_kbd, EV_SYN, SYN_REPORT, 0)) != 0) {
+                        LOG_ERROR("libevdev_uinput_write_event error writing EV_SYN: {}", write_err);
+                        return;
+                    }
                 } else {
                     // pass through
-                    libevdev_uinput_write_event(virtual_kbd, ev.type, ev.code, ev.value);
+                    if ((write_err = libevdev_uinput_write_event(virtual_kbd, ev.type, ev.code, ev.value)) != 0) {
+                        LOG_ERROR("libevdev_uinput_write_event error writing event of type {}: {}", ev.type, write_err);
+                        return;
+                    }
                 }
                 break;
             }
