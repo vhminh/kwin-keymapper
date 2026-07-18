@@ -16,6 +16,10 @@ enum Mod : u16 {
     RIGHT_ALT = 1 << 5,
 };
 
+constexpr ModMask operator|(Mod a, Mod b) {
+    return static_cast<ModMask>(static_cast<u16>(a) | static_cast<u16>(b));
+}
+
 constexpr Mod all_mods[] = {
     LEFT_CTRL,
     RIGHT_CTRL,
