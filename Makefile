@@ -1,4 +1,4 @@
-.PHONY: all install setup run clean fmt
+.PHONY: all install run clean fmt
 
 CXX := g++
 CXXFLAGS += -O2 -std=c++20 -Wall -Wextra -I src
@@ -35,13 +35,10 @@ $(TEST_TARGET): $(HDRS) $(SRCS) src/test.cpp
 install:
 	kpackagetool6 --type=KWin/Script -i src/kwin
 
-setup:
-	mkdir -p $(OUT_DIR)
-
-run: setup $(TARGET)
+run: $(TARGET)
 	./$(TARGET)
 
-test: setup $(TEST_TARGET)
+test: $(TEST_TARGET)
 	./$(TEST_TARGET)
 
 fmt:
