@@ -63,7 +63,7 @@ int wait_until_all_keys_released(libevdev* dev) {
     return 1;
 }
 
-void loop(const char* dbus_addr, const char* kb_device_file) {
+int loop(const char* dbus_addr, const char* kb_device_file) {
 #ifdef AUTO_EXIT
     const auto start_time = std::chrono::steady_clock::now();
 #endif
@@ -76,42 +76,42 @@ void loop(const char* dbus_addr, const char* kb_device_file) {
     DBusConnection* conn = dbus_connection_open(dbus_addr, &err);
     if (dbus_error_is_set(&err)) {
         LOG_ERROR("error getting DBus session connection: {}", err);
-        return;
+        return 1;
     }
     DEFER(dbus_connection_unref(conn));
 
     if (!dbus_bus_register(conn, &err)) {
         LOG_ERROR("cannot register bus: {}", err);
-        return;
+        return 1;
     }
 
     int ret = dbus_bus_request_name(conn, "io.github.vhminh.kwin_keymapper", DBUS_NAME_FLAG_REPLACE_EXISTING, &err);
     if (dbus_error_is_set(&err)) {
         LOG_ERROR("error requesting DBus name: {}", err);
-        return;
+        return 1;
     }
     if (ret != DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER) {
         LOG_ERROR("not DBus name primary owner: {}", ret);
-        return;
+        return 1;
     }
     int dbus_fd;
     if (!dbus_connection_get_unix_fd(conn, &dbus_fd)) {
         LOG_ERROR("cannot get dbus connection Unix fd");
-        return;
+        return 1;
     }
 
     // SETUP KEY GRAB AND VIRT KEYBOARD
     const int kbd_fd = open(kb_device_file, O_RDONLY | O_NONBLOCK);
     if (kbd_fd == -1) {
         LOG_ERROR("failed to open device file {}", kb_device_file);
-        return;
+        return 1;
     }
     DEFER(close(kbd_fd));
     libevdev* kbd = nullptr;
     int rc;
     if ((rc = libevdev_new_from_fd(kbd_fd, &kbd)) != 0) {
         LOG_ERROR("failed to init libevdev: {}", rc);
-        return;
+        return 1;
     }
     DEFER(libevdev_free(kbd));
     LOG_INFO("input device name: {}", libevdev_get_name(kbd));
@@ -123,7 +123,7 @@ void loop(const char* dbus_addr, const char* kb_device_file) {
                        libevdev_has_event_code(kbd, EV_KEY, KEY_ENTER);
     if (!is_keyboard) {
         LOG_ERROR("device is not a keyboard");
-        return;
+        return 1;
     }
     if ((rc = wait_until_all_keys_released(kbd)) != 0) {
         if (rc < 0) {
@@ -131,23 +131,23 @@ void loop(const char* dbus_addr, const char* kb_device_file) {
         } else {
             LOG_ERROR("get your hands off the keyboard, lol");
         }
-        return;
+        return 1;
     }
     if ((rc = libevdev_grab(kbd, LIBEVDEV_GRAB)) != 0) {
         LOG_ERROR("error grabing device fd: {}", rc);
-        return;
+        return 1;
     }
     DEFER(libevdev_grab(kbd, LIBEVDEV_UNGRAB));
     const int uinput_fd = open("/dev/uinput", O_RDWR);
     if (uinput_fd == -1) {
         LOG_ERROR("failed to open /dev/uinput");
-        return;
+        return 1;
     }
     DEFER(close(uinput_fd));
     libevdev_uinput* virtual_kbd = nullptr;
     if ((rc = libevdev_uinput_create_from_device(kbd, uinput_fd, &virtual_kbd)) != 0) {
         LOG_ERROR("cannot create virtual keyboard: {}", rc);
-        return;
+        return 1;
     }
     DEFER(libevdev_uinput_destroy(virtual_kbd));
 
@@ -165,7 +165,7 @@ void loop(const char* dbus_addr, const char* kb_device_file) {
         using namespace std::chrono_literals;
         if (elapsed_duration > 6000ms) {
             LOG_INFO("auto exit");
-            return;
+            return 0;
         }
 #endif
         const int n = poll(poll_fds, 2, 1000);
@@ -174,21 +174,21 @@ void loop(const char* dbus_addr, const char* kb_device_file) {
         }
         if (n < 0) {
             LOG_ERROR("poll error: {}, errno: {}", n, errno);
-            return;
+            return 6;
         }
         if (poll_fds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
             LOG_ERROR("poll DBus revents error: {}", poll_fds[0].revents);
-            return;
+            return 6;
         }
         if (poll_fds[1].revents & (POLLERR | POLLHUP | POLLNVAL)) {
             LOG_ERROR("poll evdev revents error: {}", poll_fds[1].revents);
-            return;
+            return 6;
         }
 
         // PROCESS DBUS MESSAGES
         if (!dbus_connection_read_write(conn, 0)) { // non blocking read
             LOG_ERROR("cannot read messages from DBus connection");
-            return;
+            return 6;
         }
         DBusMessage* msg;
         while ((msg = dbus_connection_pop_message(conn)) != nullptr) {
@@ -245,18 +245,18 @@ void loop(const char* dbus_addr, const char* kb_device_file) {
                     for (const auto& e : events_to_send) {
                         if ((write_err = libevdev_uinput_write_event(virtual_kbd, e.type, e.code, e.value)) != 0) {
                             LOG_ERROR("libevdev_uinput_write_event error writing key: {}", write_err);
-                            return;
+                            return 6;
                         }
                     }
                     if ((write_err = libevdev_uinput_write_event(virtual_kbd, EV_SYN, SYN_REPORT, 0)) != 0) {
                         LOG_ERROR("libevdev_uinput_write_event error writing EV_SYN: {}", write_err);
-                        return;
+                        return 6;
                     }
                 } else {
                     // pass through
                     if ((write_err = libevdev_uinput_write_event(virtual_kbd, ev.type, ev.code, ev.value)) != 0) {
                         LOG_ERROR("libevdev_uinput_write_event error writing event of type {}: {}", ev.type, write_err);
-                        return;
+                        return 6;
                     }
                 }
                 break;
@@ -267,7 +267,7 @@ void loop(const char* dbus_addr, const char* kb_device_file) {
             }
             default: {
                 LOG_ERROR("error reading next evdev event: {}", rc);
-                return;
+                return 6;
             }
             }
         } while (rc == LIBEVDEV_READ_STATUS_SUCCESS || rc == LIBEVDEV_READ_STATUS_SYNC);
@@ -316,7 +316,7 @@ int main(int argc, const char* argv[]) {
     LOG_INFO("DBus address: {}", dbus_addr);
     LOG_INFO("Device file: {}", device_file);
 
-    loop(dbus_addr, device_file);
+    int exit_code = loop(dbus_addr, device_file);
     LOG_INFO("KWin keymapper stopped");
-    return 0;
+    return exit_code;
 }
