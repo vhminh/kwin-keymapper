@@ -11,7 +11,7 @@
         ],
         "Id": "kwin_app_keymapper",
         "Version": "1.0",
-        "License": "GPLv3",
+        "License": "MIT",
         "Website": "https://github.com/vhminh/kwin-keymapper"
     },
     "X-Plasma-API": "javascript",
