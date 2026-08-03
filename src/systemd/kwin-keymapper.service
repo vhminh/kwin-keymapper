@@ -1,0 +1,16 @@
+[Unit]
+Description=KWin keymapper: application specific keyboard remapper for KWin
+Documentation=https://github.com/vhminh/kwin-keymapper
+Wants=dbus.socket
+After=dbus.socket
+
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/kwin-keymapper --dbus-addr {{DBUS_ADDR}} --device-file {{DEVICE}}
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

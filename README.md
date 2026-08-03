@@ -3,10 +3,8 @@
 Application specific keyboard remapper for KWin
 
 ## Install
-- Install the KWin script
-```
-make install
-```
+- Run `make install DEVICE=/dev/input/by-id/usb-<YOUR_KEYBOARD>-event-kbd`
+  - Example: `make install DEVICE=/dev/input/by-id/usb-DZTECH_DZ65RGB-event-kbd`
 - Enable the KWin script in System Settings
 - Add DBus policy to allow root user to access session bus. Create the file `/etc/dbus-1/session-local.conf` with the following content:
 ```xml
@@ -16,6 +14,7 @@ make install
   </policy>
 </busconfig>
 ```
+- Check Systemd service log: `sudo journalctl -u kwin-keymapper -fb`
 
 ## Configuration
 Edit your keymaps in [`src/config.cpp`](src/config.cpp), see `user_key_map()`
