@@ -36,7 +36,7 @@ struct std::formatter<DBusError> : std::formatter<std::string> {
 };
 
 bool any_key_pressed(libevdev* dev) {
-    for (int key = 0; key < KEY_MAX; ++key) {
+    for (int key = 0; key <= KEY_MAX; ++key) {
         if (libevdev_has_event_code(dev, EV_KEY, key)) {
             if (libevdev_get_event_value(dev, EV_KEY, key) != 0) {
                 return true;
@@ -223,6 +223,8 @@ int loop(const char* dbus_addr, const char* kb_device_file) {
             );
             if (dbus_error_is_set(&err)) {
                 LOG_ERROR("error parsing message args: {}", err);
+                dbus_error_free(&err);
+                dbus_error_init(&err);
                 continue;
             }
             active_window = std::make_unique<Window>(win_class, win_name, win_caption);

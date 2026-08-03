@@ -10,7 +10,7 @@ std::set<std::tuple<std::string_view, std::string_view>> terminal_emulators = {
 };
 
 bool is_terminal_emulator(const Window& window) {
-    return terminal_emulators.find(std::make_tuple(window.xclass, window.name)) != terminal_emulators.end();
+    return terminal_emulators.contains(std::tie(window.xclass, window.name));
 }
 
 std::tuple<ModMask, u16> user_key_map(const Box<Window>& active_window, ModMask mods, u16 evdev_key) {
