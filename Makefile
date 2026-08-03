@@ -1,4 +1,4 @@
-.PHONY: all install run clean fmt
+.PHONY: all install run test clean fmt
 
 CXX := g++
 CXXFLAGS += -O2 -std=c++20 -Wall -Wextra -I src
@@ -49,6 +49,7 @@ install: $(TARGET)
 	@echo "[4/4]: Enable Systemd service"
 	sudo systemctl daemon-reload
 	sudo systemctl enable --now kwin-keymapper.service
+	sudo systemctl restart kwin-keymapper.service
 	@printf "Next steps (see README.md):\n- Enabling KWin script in System Settings\n- Allowing root user to access session DBus\n"
 
 run: $(TARGET)
