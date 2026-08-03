@@ -17,17 +17,14 @@ Application specific keyboard remapper for KWin
 - Check Systemd service log: `sudo journalctl -u kwin-keymapper -fb`
 
 ## Configuration
-Edit your keymaps in [`src/config.cpp`](src/config.cpp), see `user_key_map()`
+The default keymap aims to mirror MacOS shortcuts (<kbd>Alt</kbd>+<kbd>C</kbd> to copy, <kbd>Alt</kbd>+<kbd>V</kbd> to paste), and works in both terminals and GUI apps
 
-## Usage
-```sh
-make clean
-make && sudo out/kwin-keymapper --dbus-addr $DBUS_SESSION_BUS_ADDRESS --device-file /dev/input/eventX
-```
+Edit your own keymaps in [`src/config.cpp`](src/config.cpp), see `user_key_map()`
 
 ## Development
 ```sh
 make clean
 rm -rf compile_commands.json && CXXFLAGS=-DAUTO_EXIT bear -- make all
+make test
 CXXFLAGS=-DAUTO_EXIT make && sudo out/kwin-keymapper --dbus-addr $DBUS_SESSION_BUS_ADDRESS --device-file /dev/input/eventX
 ```
