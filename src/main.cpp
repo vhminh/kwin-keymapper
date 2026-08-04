@@ -223,9 +223,7 @@ int loop(const char* dbus_addr, const char* kb_device_file) {
             );
             if (dbus_error_is_set(&err)) {
                 LOG_ERROR("error parsing message args: {}", err);
-                dbus_error_free(&err);
-                dbus_error_init(&err);
-                continue;
+                return 6;
             }
             active_window = std::make_unique<Window>(win_class, win_name, win_caption);
             LOG_INFO("window activated, class: {}, name: {}, caption: {}", win_class, win_name, win_caption);
