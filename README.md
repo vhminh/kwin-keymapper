@@ -27,6 +27,8 @@ The default keymap aims to mirror MacOS shortcuts (<kbd>Alt</kbd>+<kbd>C</kbd> t
 
 Edit your own keymaps in [`src/config.cpp`](src/config.cpp), see `user_key_map()`
 
+Limitations: Only modifier keys combined with a single non-modifier key are supported (e.g. <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd>)
+
 ## Development
 - Generate compile_commands.json:
   ```sh
