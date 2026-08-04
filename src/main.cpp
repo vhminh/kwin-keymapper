@@ -63,6 +63,36 @@ int wait_until_all_keys_released(libevdev* dev) {
     return 1;
 }
 
+// not thread-safe, has shared global state
+int process_evdev_event(
+    const Box<Window>& active_window, const libevdev_uinput* virtual_kbd, KeyMapper& keymapper, input_event ev
+) {
+    static std::vector<input_event> events_to_send; // reuse a global std::vector to avoid allocation in a hot loop
+    events_to_send.reserve(16);
+    events_to_send.clear();
+    int err = 0;
+    if (ev.type == EV_KEY) {
+        keymapper.process_evdev_key(active_window, ev, events_to_send);
+        for (const auto& e : events_to_send) {
+            if ((err = libevdev_uinput_write_event(virtual_kbd, e.type, e.code, e.value)) != 0) {
+                LOG_ERROR("libevdev_uinput_write_event error writing key: {}", err);
+                return 6;
+            }
+        }
+        if ((err = libevdev_uinput_write_event(virtual_kbd, EV_SYN, SYN_REPORT, 0)) != 0) {
+            LOG_ERROR("libevdev_uinput_write_event error writing EV_SYN: {}", err);
+            return 6;
+        }
+    } else {
+        // pass through
+        if ((err = libevdev_uinput_write_event(virtual_kbd, ev.type, ev.code, ev.value)) != 0) {
+            LOG_ERROR("libevdev_uinput_write_event error writing event of type {}: {}", ev.type, err);
+            return 6;
+        }
+    }
+    return 0;
+}
+
 int loop(const char* dbus_addr, const char* kb_device_file) {
 #ifdef AUTO_EXIT
     const auto start_time = std::chrono::steady_clock::now();
@@ -154,8 +184,6 @@ int loop(const char* dbus_addr, const char* kb_device_file) {
     // MAIN LOOP
     KeyMapper keymapper;
     Box<Window> active_window;
-    std::vector<input_event> events_to_send; // for reuse, avoiding allocation in a hot loop
-    events_to_send.reserve(16);
     pollfd poll_fds[2] = {
         pollfd{.fd = dbus_fd, .events = POLLIN, .revents = 0}, pollfd{.fd = kbd_fd, .events = POLLIN, .revents = 0}
     };
@@ -238,31 +266,26 @@ int loop(const char* dbus_addr, const char* kb_device_file) {
             }
             switch (rc) {
             case LIBEVDEV_READ_STATUS_SUCCESS: {
-                int write_err = 0;
-                if (ev.type == EV_KEY) {
-                    events_to_send.clear();
-                    keymapper.process_evdev_key(active_window, ev, events_to_send);
-                    for (const auto& e : events_to_send) {
-                        if ((write_err = libevdev_uinput_write_event(virtual_kbd, e.type, e.code, e.value)) != 0) {
-                            LOG_ERROR("libevdev_uinput_write_event error writing key: {}", write_err);
-                            return 6;
-                        }
-                    }
-                    if ((write_err = libevdev_uinput_write_event(virtual_kbd, EV_SYN, SYN_REPORT, 0)) != 0) {
-                        LOG_ERROR("libevdev_uinput_write_event error writing EV_SYN: {}", write_err);
-                        return 6;
-                    }
-                } else {
-                    // pass through
-                    if ((write_err = libevdev_uinput_write_event(virtual_kbd, ev.type, ev.code, ev.value)) != 0) {
-                        LOG_ERROR("libevdev_uinput_write_event error writing event of type {}: {}", ev.type, write_err);
-                        return 6;
-                    }
+                if (int code = process_evdev_event(active_window, virtual_kbd, keymapper, ev); code != 0) {
+                    LOG_ERROR("error processing evdev event");
+                    return code;
                 }
                 break;
             }
             case LIBEVDEV_READ_STATUS_SYNC: {
-                TODO("LIBEVDEV_READ_STATUS_SYNC not supported");
+                LOG_WARN("SYN_DROPPED, resyncing device state");
+                int sync_rc;
+                while ((sync_rc = libevdev_next_event(kbd, LIBEVDEV_READ_FLAG_SYNC, &ev)) ==
+                       LIBEVDEV_READ_STATUS_SYNC) {
+                    if (int code = process_evdev_event(active_window, virtual_kbd, keymapper, ev); code != 0) {
+                        LOG_ERROR("error processing evdev event while syncing");
+                        return code;
+                    }
+                }
+                if (sync_rc != -EAGAIN) {
+                    LOG_ERROR("error draining evdev sync events: {}", sync_rc);
+                    return 6;
+                }
                 break;
             }
             default: {
