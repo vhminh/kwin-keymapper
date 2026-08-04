@@ -7,7 +7,7 @@
 #include <cassert>
 
 // reset lowest set bit
-u64 blsr(u64 value) {
+inline u64 blsr(u64 value) {
     return value & (value - 1);
 }
 
@@ -156,7 +156,8 @@ void KeyMapper::process_evdev_key(
     this->phys_alphas = apply_event_to_alphas(this->phys_alphas, ev);
     bool new_alpha_key_pressed = !is_evdev_mod(ev.code) && (ev.value == 1 || ev.value == 2);
 
-    u16 expected_virt_mods = this->phys_mods, expected_virt_key = ev.code;
+    ModMask expected_virt_mods = this->phys_mods;
+    u16 expected_virt_key = ev.code;
     if (new_alpha_key_pressed && is_exactly_one_alpha_key_pressed(this->phys_alphas)) {
         std::tie(expected_virt_mods, expected_virt_key) = user_key_map(active_window, phys_mods, ev.code);
     }
