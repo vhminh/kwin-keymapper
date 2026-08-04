@@ -93,6 +93,8 @@ void produce_alpha_diff(AlphaSet current, AlphaSet expected, timeval time, std::
         if (releases != 0) {
             emit_bits(releases, i, time, 0, res);
         }
+    }
+    for (size_t i = 0; i < KEY_WORDS; ++i) {
         u64 presses = (expected[i] & ~current[i]);
         if (presses != 0) {
             emit_bits(presses, i, time, 1, res);
