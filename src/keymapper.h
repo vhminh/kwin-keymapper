@@ -7,7 +7,7 @@
 #include <linux/input.h>
 #include <vector>
 
-const size_t KEY_WORDS = KEY_MAX / sizeof(u64) + 1;
+const size_t KEY_WORDS = KEY_MAX / 64 + 1;
 
 using AlphaSet = std::array<u64, KEY_WORDS>; // bitset but uses u64 words for faster traverse, looks like SIMD huh
 
