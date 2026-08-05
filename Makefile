@@ -11,6 +11,7 @@ SRCS := src/argparse.cpp \
         src/keymapper.cpp
 
 HDRS := src/argparse.h \
+        src/bitset.h \
         src/config.h \
         src/def.h \
         src/defer.h \
