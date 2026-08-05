@@ -66,8 +66,8 @@ int wait_until_all_keys_released(libevdev* dev) {
 
 // not thread-safe, has shared global state
 int process_evdev_event(
-    StatsReporter& reporter, const Box<Window>& active_window, const libevdev_uinput* virtual_kbd, KeyMapper& keymapper,
-    input_event ev
+    [[maybe_unused]] StatsReporter& reporter, const Box<Window>& active_window, const libevdev_uinput* virtual_kbd,
+    KeyMapper& keymapper, input_event ev
 ) {
     static std::vector<input_event> events_to_send; // reuse a global std::vector to avoid allocation in a hot loop
     events_to_send.reserve(16);
@@ -75,12 +75,14 @@ int process_evdev_event(
     int err = 0;
     if (ev.type == EV_KEY) {
         {
+#ifdef REPORT_STATS
             const auto start = std::chrono::steady_clock::now();
             DEFER({
                 const auto end = std::chrono::steady_clock::now();
                 u64 elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
                 reporter.record(elapsed);
             });
+#endif
             keymapper.process_evdev_key(active_window, ev, events_to_send);
         }
         for (const auto& e : events_to_send) {
@@ -192,7 +194,7 @@ int loop(const char* dbus_addr, const char* kb_device_file) {
     DEFER(libevdev_uinput_destroy(virtual_kbd));
 
     // MAIN LOOP
-    StatsReporter loop_stats("main::loop::while"), process_key_stats("KeyMapper::process_evdev_key()");
+    [[maybe_unused]] StatsReporter loop_stats("main::loop::while"), process_key_stats("KeyMapper::process_evdev_key()");
     KeyMapper keymapper;
     Box<Window> active_window;
     pollfd poll_fds[2] = {
@@ -224,13 +226,15 @@ int loop(const char* dbus_addr, const char* kb_device_file) {
             return 6;
         }
 
-        // COLLECT STATS
+// COLLECT STATS
+#ifdef REPORT_STATS
         const auto start = std::chrono::steady_clock::now();
         DEFER({
             const auto end = std::chrono::steady_clock::now();
             u64 elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
             loop_stats.record(elapsed);
         });
+#endif
 
         // PROCESS DBUS MESSAGES
         if (!dbus_connection_read_write(conn, 0)) { // non blocking read

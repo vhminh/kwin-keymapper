@@ -40,5 +40,5 @@ Limitations: Only modifier keys combined with a single non-modifier key are supp
   ```
 - Run the tool:
   ```sh
-  CXXFLAGS=-DAUTO_EXIT make && sudo out/kwin-keymapper --dbus-addr $DBUS_SESSION_BUS_ADDRESS --device-file /dev/input/eventX
+  CXXFLAGS="-DAUTO_EXIT -DREPORT_STATS" make && sudo out/kwin-keymapper --dbus-addr $DBUS_SESSION_BUS_ADDRESS --device-file /dev/input/eventX
   ```
