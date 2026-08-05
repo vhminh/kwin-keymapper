@@ -6,6 +6,7 @@
 #include "stats.h"
 #include "window.h"
 
+#include <chrono>
 #include <dbus/dbus.h>
 #include <fcntl.h>
 #include <libevdev/libevdev-uinput.h>
