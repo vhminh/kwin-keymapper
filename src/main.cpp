@@ -200,10 +200,11 @@ int loop(const char* dbus_addr, const char* kb_device_file) {
     pollfd poll_fds[2] = {
         pollfd{.fd = dbus_fd, .events = POLLIN, .revents = 0}, pollfd{.fd = kbd_fd, .events = POLLIN, .revents = 0}
     };
-    std::array<std::byte, 2048> buf;
+    const size_t ARENA_SIZE = 8 * 1024;
+    auto buf = std::make_unique<std::byte[]>(ARENA_SIZE);
     while (true) {
         // SETUP ARENA ALLOCATOR
-        std::pmr::monotonic_buffer_resource arena{buf.data(), buf.size()};
+        std::pmr::monotonic_buffer_resource arena{buf.get(), ARENA_SIZE};
 #ifdef AUTO_EXIT
         auto elapsed_duration = std::chrono::steady_clock::now() - start_time;
         using namespace std::chrono_literals;
@@ -212,7 +213,7 @@ int loop(const char* dbus_addr, const char* kb_device_file) {
             return 0;
         }
 #endif
-        // POLL FOR NEW EVENTSPOLLING
+        // POLL FOR NEW EVENTS
         const int n = poll(poll_fds, 2, 1000);
         if (n == 0 || (n == -1 && errno == EINTR)) {
             continue;

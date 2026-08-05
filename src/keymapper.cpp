@@ -64,33 +64,26 @@ KeyMask single_non_mod_key_mask(u16 key) {
     return mask;
 }
 
-std::pmr::vector<input_event> produce_mod_diff(
-    ModMask current, ModMask expected, timeval time, std::pmr::memory_resource* arena
-) {
-    std::pmr::vector<input_event> result{arena};
-    result.reserve(8);
+void produce_mod_diff(ModMask current, ModMask expected, timeval time, std::pmr::vector<input_event>& output) {
     for (Mod m : all_mods) {
         if ((current & m) && ((expected & m) == 0)) {
-            result.push_back(input_event{.time = time, .type = EV_KEY, .code = mod_to_evdev(m), .value = 0});
+            output.push_back(input_event{.time = time, .type = EV_KEY, .code = mod_to_evdev(m), .value = 0});
         }
     }
     for (Mod m : all_mods) {
         if (((current & m) == 0) && (expected & m)) {
-            result.push_back(input_event{.time = time, .type = EV_KEY, .code = mod_to_evdev(m), .value = 1});
+            output.push_back(input_event{.time = time, .type = EV_KEY, .code = mod_to_evdev(m), .value = 1});
         }
     }
-    return result;
 }
 
-std::pmr::vector<input_event> produce_non_mod_diff(
-    const KeyMask& current, const KeyMask& expected, timeval time, std::pmr::memory_resource* arena
+void produce_non_mod_diff(
+    const KeyMask& current, const KeyMask& expected, timeval time, std::pmr::vector<input_event>& output
 ) {
-    std::pmr::vector<input_event> result{arena};
-    result.reserve(16);
-    auto emit_bits = [&result](u64 bits, size_t base, timeval time, i32 pressed) {
+    auto emit_bits = [&output](u64 bits, size_t base, timeval time, i32 pressed) {
         for (; bits; bits = blsr(bits)) {
             u16 code = static_cast<u16>(base + std::countr_zero(bits));
-            result.push_back(input_event{.time = time, .type = EV_KEY, .code = code, .value = pressed});
+            output.push_back(input_event{.time = time, .type = EV_KEY, .code = code, .value = pressed});
         }
     };
     for (size_t i = 0; i < current.qwords.size(); ++i) {
@@ -105,7 +98,6 @@ std::pmr::vector<input_event> produce_non_mod_diff(
             emit_bits(presses, i * 64, time, 1);
         }
     }
-    return result;
 }
 
 ModMask apply_event_to_mods(ModMask mask, const input_event& ev) {
@@ -150,12 +142,6 @@ void apply_events_to_non_mods(KeyMask& mask, const std::pmr::vector<input_event>
     }
 }
 
-template <class T>
-inline void append_vec(std::pmr::vector<T>& dst, const std::pmr::vector<T>& src) {
-    dst.reserve(dst.size() + src.size());
-    dst.insert(dst.end(), src.begin(), src.end());
-}
-
 std::pmr::vector<input_event> KeyMapper::process_evdev_key(
     const Box<Window>& active_window, const input_event& ev, std::pmr::memory_resource* arena
 ) {
@@ -174,15 +160,12 @@ std::pmr::vector<input_event> KeyMapper::process_evdev_key(
     bool should_remap = expected_virt_mods != this->phys_mods || expected_virt_key != ev.code;
     if (should_remap) {
         // make the virt state matches the user defined mapping
-        append_vec(result, produce_mod_diff(this->virt_mods, expected_virt_mods, ev.time, arena));
-        append_vec(
-            result,
-            produce_non_mod_diff(this->virt_non_mods, single_non_mod_key_mask(expected_virt_key), ev.time, arena)
-        );
+        produce_mod_diff(this->virt_mods, expected_virt_mods, ev.time, result);
+        produce_non_mod_diff(this->virt_non_mods, single_non_mod_key_mask(expected_virt_key), ev.time, result);
     } else {
         // make the virt state matches the phys state
-        append_vec(result, produce_mod_diff(this->virt_mods, this->phys_mods, ev.time, arena));
-        append_vec(result, produce_non_mod_diff(this->virt_non_mods, this->phys_non_mods, ev.time, arena));
+        produce_mod_diff(this->virt_mods, this->phys_mods, ev.time, result);
+        produce_non_mod_diff(this->virt_non_mods, this->phys_non_mods, ev.time, result);
     }
 
     this->virt_mods = apply_events_to_mods(this->virt_mods, result);
@@ -203,7 +186,7 @@ void assert_keys(
     KeyMapper& mapper, const Box<Window>& active_window, input_event input,
     const std::vector<input_event>& expected_outputs
 ) {
-    std::array<std::byte, 512> buf;
+    std::array<std::byte, 1024> buf;
     std::pmr::monotonic_buffer_resource arena{buf.data(), buf.size()};
     std::pmr::vector<input_event> outputs = mapper.process_evdev_key(active_window, input, &arena);
     LOG_INFO("outputs:");

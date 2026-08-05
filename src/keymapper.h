@@ -5,6 +5,7 @@
 #include "window.h"
 
 #include <linux/input.h>
+#include <memory_resource>
 #include <vector>
 
 using KeyMask = BitSet<KEY_MAX + 1>;
