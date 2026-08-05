@@ -5,6 +5,7 @@
 
 #include <bit>
 #include <cassert>
+#include <linux/input.h>
 
 // reset lowest set bit
 inline u64 blsr(u64 value) {
@@ -56,14 +57,6 @@ bool is_evdev_mod(u16 evdev_key) {
     return evdev_to_mod(evdev_key) != Mod::NONE;
 }
 
-bool is_exactly_one_alpha_key_pressed(AlphaSet set) {
-    int cnt = 0;
-    for (size_t i = 0; i < KEY_WORDS; ++i) {
-        cnt += std::popcount(set[i]);
-    }
-    return cnt == 1;
-}
-
 AlphaSet single_alpha_key_set(u16 key) {
     AlphaSet set{0};
     set[key / 64] |= (u64(1) << (key % 64));
@@ -74,20 +67,22 @@ void produce_mod_diff(ModMask current, ModMask expected, timeval time, std::vect
     for (Mod m : all_mods) {
         if ((current & m) && ((expected & m) == 0)) {
             res.push_back(input_event{.time = time, .type = EV_KEY, .code = mod_to_evdev(m), .value = 0});
-        } else if (((current & m) == 0) && (expected & m)) {
+        }
+    }
+    for (Mod m : all_mods) {
+        if (((current & m) == 0) && (expected & m)) {
             res.push_back(input_event{.time = time, .type = EV_KEY, .code = mod_to_evdev(m), .value = 1});
         }
     }
 }
 
-void emit_bits(u64 bits, size_t i, timeval time, i32 pressed, std::vector<input_event>& res) {
-    for (; bits; bits = blsr(bits)) {
-        u16 code = static_cast<u16>(i * 64 + std::countr_zero(bits));
-        res.push_back(input_event{.time = time, .type = EV_KEY, .code = code, .value = pressed});
-    }
-}
-
 void produce_alpha_diff(AlphaSet current, AlphaSet expected, timeval time, std::vector<input_event>& res) {
+    auto emit_bits = [](u64 bits, size_t i, timeval time, i32 pressed, std::vector<input_event>& res) {
+        for (; bits; bits = blsr(bits)) {
+            u16 code = static_cast<u16>(i * 64 + std::countr_zero(bits));
+            res.push_back(input_event{.time = time, .type = EV_KEY, .code = code, .value = pressed});
+        }
+    };
     for (size_t i = 0; i < KEY_WORDS; ++i) {
         u64 releases = (current[i] & ~expected[i]);
         if (releases != 0) {
@@ -158,11 +153,10 @@ void KeyMapper::process_evdev_key(
 
     ModMask expected_virt_mods = this->phys_mods;
     u16 expected_virt_key = ev.code;
-    if (new_alpha_key_pressed && is_exactly_one_alpha_key_pressed(this->phys_alphas)) {
+    if (new_alpha_key_pressed) {
         std::tie(expected_virt_mods, expected_virt_key) = user_key_map(active_window, phys_mods, ev.code);
     }
-    bool should_remap =
-        new_alpha_key_pressed && (expected_virt_mods != this->phys_mods || expected_virt_key != ev.code);
+    bool should_remap = expected_virt_mods != this->phys_mods || expected_virt_key != ev.code;
     if (should_remap) {
         // make the virt state matches the user defined mapping
         produce_mod_diff(this->virt_mods, expected_virt_mods, ev.time, result);
@@ -174,4 +168,76 @@ void KeyMapper::process_evdev_key(
     }
     this->virt_mods = apply_events_to_mods(this->virt_mods, result);
     this->virt_alphas = apply_events_to_alphas(this->virt_alphas, result);
+}
+
+#include "test.h"
+input_event down(u16 code) {
+    return input_event{.time = {}, .type = EV_KEY, .code = code, .value = 1};
+}
+
+input_event up(u16 code) {
+    return input_event{.time = {}, .type = EV_KEY, .code = code, .value = 0};
+}
+
+void assert_keys(
+    KeyMapper& mapper, const Box<Window>& active_window, input_event input,
+    const std::vector<input_event>& expected_outputs
+) {
+    std::vector<input_event> outputs;
+    mapper.process_evdev_key(active_window, input, outputs);
+    LOG_INFO("outputs:");
+    for (auto ev : outputs) {
+        LOG_INFO("type: {}, code: {}, value: {}", ev.type, ev.code, ev.value);
+    }
+    LOG_INFO("expected outputs:");
+    for (auto ev : expected_outputs) {
+        LOG_INFO("type: {}, code: {}, value: {}", ev.type, ev.code, ev.value);
+    }
+    ASSERT_EQ(outputs.size(), expected_outputs.size());
+    for (size_t i = 0; i < outputs.size(); ++i) {
+        ASSERT_EQ(outputs[i].type, expected_outputs[i].type);
+        ASSERT_EQ(outputs[i].code, expected_outputs[i].code);
+        ASSERT_EQ(outputs[i].value, expected_outputs[i].value);
+    }
+}
+
+static Box<Window> firefox = std::make_unique<Window>("firefox", "firefox", "Youtube");
+static Box<Window> alacritty = std::make_unique<Window>("Alacritty", "alacritty", "Alacritty - kwin-keymapper");
+
+TEST_CASE("maps Alt+C to Ctrl+C in GUI apps") {
+    KeyMapper mapper;
+    assert_keys(mapper, firefox, down(KEY_LEFTALT), {down(KEY_LEFTALT)});
+    assert_keys(mapper, firefox, down(KEY_C), {up(KEY_LEFTALT), down(KEY_LEFTCTRL), down(KEY_C)});
+    assert_keys(mapper, firefox, up(KEY_C), {up(KEY_LEFTCTRL), down(KEY_LEFTALT), up(KEY_C)});
+    assert_keys(mapper, firefox, up(KEY_LEFTALT), {up(KEY_LEFTALT)});
+}
+
+TEST_CASE("maps Alt+C to Ctrl+Shift+C in terminal apps") {
+    KeyMapper mapper;
+    assert_keys(mapper, alacritty, down(KEY_LEFTALT), {down(KEY_LEFTALT)});
+    assert_keys(
+        mapper, alacritty, down(KEY_C), {up(KEY_LEFTALT), down(KEY_LEFTCTRL), down(KEY_LEFTSHIFT), down(KEY_C)}
+    );
+    assert_keys(mapper, alacritty, up(KEY_C), {up(KEY_LEFTCTRL), up(KEY_LEFTSHIFT), down(KEY_LEFTALT), up(KEY_C)});
+    assert_keys(mapper, alacritty, up(KEY_LEFTALT), {up(KEY_LEFTALT)});
+}
+
+TEST_CASE("maps Alt+Shift+F to Ctrl+Shift+F in GUI apps") {
+    KeyMapper mapper;
+    assert_keys(mapper, firefox, down(KEY_LEFTSHIFT), {down(KEY_LEFTSHIFT)});
+    assert_keys(mapper, firefox, down(KEY_LEFTALT), {down(KEY_LEFTALT)});
+    assert_keys(mapper, firefox, down(KEY_F), {up(KEY_LEFTALT), down(KEY_LEFTCTRL), down(KEY_F)});
+    assert_keys(mapper, firefox, up(KEY_F), {up(KEY_LEFTCTRL), down(KEY_LEFTALT), up(KEY_F)});
+    assert_keys(mapper, firefox, up(KEY_LEFTALT), {up(KEY_LEFTALT)});
+    assert_keys(mapper, firefox, up(KEY_LEFTSHIFT), {up(KEY_LEFTSHIFT)});
+}
+
+TEST_CASE("maps Ctrl+N/Ctrl+P to Up/Down in GUI apps") {
+    KeyMapper mapper;
+    assert_keys(mapper, firefox, down(KEY_LEFTCTRL), {down(KEY_LEFTCTRL)});
+    assert_keys(mapper, firefox, down(KEY_N), {up(KEY_LEFTCTRL), down(KEY_DOWN)});
+    assert_keys(mapper, firefox, down(KEY_P), {up(KEY_DOWN), down(KEY_UP)});
+    assert_keys(mapper, firefox, up(KEY_N), {down(KEY_LEFTCTRL), up(KEY_UP), down(KEY_P)});
+    assert_keys(mapper, firefox, up(KEY_P), {up(KEY_P)});
+    assert_keys(mapper, firefox, up(KEY_LEFTCTRL), {up(KEY_LEFTCTRL)});
 }
