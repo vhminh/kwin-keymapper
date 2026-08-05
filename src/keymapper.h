@@ -12,7 +12,9 @@ using KeyMask = BitSet<KEY_MAX + 1>;
 class KeyMapper {
 public:
     KeyMapper();
-    void process_evdev_key(const Box<Window>& active_window, const input_event&, std::vector<input_event>& result);
+    std::pmr::vector<input_event> process_evdev_key(
+        const Box<Window>& active_window, const input_event&, std::pmr::memory_resource* arena
+    );
 
 private:
     ModMask phys_mods; // mods held on the physical keyboard

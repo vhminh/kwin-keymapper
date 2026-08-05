@@ -14,6 +14,7 @@
 #include <linux/input-event-codes.h>
 #include <linux/input.h>
 #include <memory>
+#include <memory_resource>
 #include <string>
 #include <sys/poll.h>
 #include <thread>
@@ -68,13 +69,11 @@ int wait_until_all_keys_released(libevdev* dev) {
 // not thread-safe, has shared global state
 int process_evdev_event(
     [[maybe_unused]] StatsReporter& reporter, const Box<Window>& active_window, const libevdev_uinput* virtual_kbd,
-    KeyMapper& keymapper, input_event ev
+    KeyMapper& keymapper, input_event ev, std::pmr::memory_resource* arena
 ) {
-    static std::vector<input_event> events_to_send; // reuse a global std::vector to avoid allocation in a hot loop
-    events_to_send.reserve(16);
-    events_to_send.clear();
     int err = 0;
     if (ev.type == EV_KEY) {
+        std::pmr::vector<input_event> mapped{arena};
         {
 #ifdef REPORT_STATS
             const auto start = std::chrono::steady_clock::now();
@@ -84,9 +83,9 @@ int process_evdev_event(
                 reporter.record(elapsed);
             });
 #endif
-            keymapper.process_evdev_key(active_window, ev, events_to_send);
+            mapped = keymapper.process_evdev_key(active_window, ev, arena);
         }
-        for (const auto& e : events_to_send) {
+        for (const auto& e : mapped) {
             if ((err = libevdev_uinput_write_event(virtual_kbd, e.type, e.code, e.value)) != 0) {
                 LOG_ERROR("libevdev_uinput_write_event error writing key: {}", err);
                 return 6;
@@ -201,7 +200,10 @@ int loop(const char* dbus_addr, const char* kb_device_file) {
     pollfd poll_fds[2] = {
         pollfd{.fd = dbus_fd, .events = POLLIN, .revents = 0}, pollfd{.fd = kbd_fd, .events = POLLIN, .revents = 0}
     };
+    std::array<std::byte, 2048> buf;
     while (true) {
+        // SETUP ARENA ALLOCATOR
+        std::pmr::monotonic_buffer_resource arena{buf.data(), buf.size()};
 #ifdef AUTO_EXIT
         auto elapsed_duration = std::chrono::steady_clock::now() - start_time;
         using namespace std::chrono_literals;
@@ -210,6 +212,7 @@ int loop(const char* dbus_addr, const char* kb_device_file) {
             return 0;
         }
 #endif
+        // POLL FOR NEW EVENTSPOLLING
         const int n = poll(poll_fds, 2, 1000);
         if (n == 0 || (n == -1 && errno == EINTR)) {
             continue;
@@ -290,7 +293,8 @@ int loop(const char* dbus_addr, const char* kb_device_file) {
             }
             switch (rc) {
             case LIBEVDEV_READ_STATUS_SUCCESS: {
-                if (int code = process_evdev_event(process_key_stats, active_window, virtual_kbd, keymapper, ev);
+                if (int code =
+                        process_evdev_event(process_key_stats, active_window, virtual_kbd, keymapper, ev, &arena);
                     code != 0) {
                     LOG_ERROR("error processing evdev event");
                     return code;
@@ -302,7 +306,8 @@ int loop(const char* dbus_addr, const char* kb_device_file) {
                 int sync_rc;
                 while ((sync_rc = libevdev_next_event(kbd, LIBEVDEV_READ_FLAG_SYNC, &ev)) ==
                        LIBEVDEV_READ_STATUS_SYNC) {
-                    if (int code = process_evdev_event(process_key_stats, active_window, virtual_kbd, keymapper, ev);
+                    if (int code =
+                            process_evdev_event(process_key_stats, active_window, virtual_kbd, keymapper, ev, &arena);
                         code != 0) {
                         LOG_ERROR("error processing evdev event while syncing");
                         return code;
