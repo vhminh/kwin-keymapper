@@ -8,11 +8,11 @@
 
 inline constexpr std::array<u64, 12> buckets{10, 20, 40, 80, 160, 320, 640, 1280, 2560, 5120, 10240, 20480};
 
-const int REPORT_INTERVAL = 1024;
+const int REPORT_INTERVAL = 256;
 
 class StatsReporter {
 public:
-    StatsReporter(std::string_view aspect);
+    explicit StatsReporter(std::string_view aspect);
 
     void record(u64 nanos);
 

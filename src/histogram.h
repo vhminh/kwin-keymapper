@@ -17,9 +17,9 @@ template <>
 struct std::formatter<Quantile> : std::formatter<std::string> {
     auto format(const Quantile& q, std::format_context& ctx) const {
         if (q.inf_bucket) {
-            return std::formatter<std::string>::format(std::format(">{}", q.value), ctx);
+            return std::formatter<std::string>::format(std::format(">{:.0f}", q.value), ctx);
         } else {
-            return std::formatter<std::string>::format(std::format("{}", q.value), ctx);
+            return std::formatter<std::string>::format(std::format("{:.0f}", q.value), ctx);
         }
     }
 };
@@ -30,7 +30,7 @@ class Histogram {
     static_assert(N > 2, "expect more than 2 buckets");
 
 public:
-    Histogram(std::array<u64, N> buckets) : buckets(buckets), counts{} {
+    Histogram(const std::array<u64, N>& buckets) : buckets(buckets), counts{} {
         for (size_t i = 0; i < buckets.size() - 1; ++i) {
             assert(buckets[i] < buckets[i + 1]);
         }
@@ -55,7 +55,7 @@ public:
 
         double target = q * _total;
         double cum = 0.0;
-        for (size_t i = 0; i < counts.size(); ++i) {
+        for (size_t i = 0; i < buckets.size(); ++i) {
             if (counts[i] > 0 && cum + counts[i] >= target) {
                 double low = (i == 0) ? 0.0 : buckets[i - 1];
                 return {std::lerp(low, buckets[i], (target - cum) / counts[i]), false};
