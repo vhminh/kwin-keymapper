@@ -57,7 +57,7 @@ bool is_evdev_mod(u16 evdev_key) {
     return evdev_to_mod(evdev_key) != Mod::NONE;
 }
 
-KeyMask single_alpha_key_set(u16 key) {
+KeyMask single_non_mod_key_mask(u16 key) {
     KeyMask mask;
     mask.set(key);
     return mask;
@@ -147,10 +147,10 @@ void KeyMapper::process_evdev_key(
     this->phys_mods = apply_event_to_mods(this->phys_mods, ev);
     apply_event_to_non_mods(this->phys_non_mods, ev);
 
-    bool new_alpha_key_pressed = !is_evdev_mod(ev.code) && (ev.value == 1 || ev.value == 2);
+    bool new_non_mod_key_pressed = !is_evdev_mod(ev.code) && (ev.value == 1 || ev.value == 2);
     ModMask expected_virt_mods = this->phys_mods;
     u16 expected_virt_key = ev.code;
-    if (new_alpha_key_pressed) {
+    if (new_non_mod_key_pressed) {
         std::tie(expected_virt_mods, expected_virt_key) = user_key_map(active_window, phys_mods, ev.code);
     }
 
@@ -158,7 +158,7 @@ void KeyMapper::process_evdev_key(
     if (should_remap) {
         // make the virt state matches the user defined mapping
         produce_mod_diff(this->virt_mods, expected_virt_mods, ev.time, result);
-        produce_non_mod_diff(this->virt_non_mods, single_alpha_key_set(expected_virt_key), ev.time, result);
+        produce_non_mod_diff(this->virt_non_mods, single_non_mod_key_mask(expected_virt_key), ev.time, result);
     } else {
         // make the virt state matches the phys state
         produce_mod_diff(this->virt_mods, this->phys_mods, ev.time, result);
