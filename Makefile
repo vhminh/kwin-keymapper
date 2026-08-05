@@ -8,16 +8,19 @@ LDLIBS += $(shell pkg-config --libs $(LIBS))
 
 SRCS := src/argparse.cpp \
         src/config.cpp \
-        src/keymapper.cpp
+        src/keymapper.cpp \
+        src/stats.cpp
 
 HDRS := src/argparse.h \
         src/bitset.h \
         src/config.h \
         src/def.h \
         src/defer.h \
+        src/histogram.h \
         src/kb.h \
         src/keymapper.h \
         src/log.h \
+        src/stats.h \
         src/test.h \
         src/window.h
 

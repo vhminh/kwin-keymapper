@@ -3,8 +3,10 @@
 #include "defer.h"
 #include "keymapper.h"
 #include "log.h"
+#include "stats.h"
 #include "window.h"
 
+#include <chrono>
 #include <dbus/dbus.h>
 #include <fcntl.h>
 #include <libevdev/libevdev-uinput.h>
@@ -65,14 +67,25 @@ int wait_until_all_keys_released(libevdev* dev) {
 
 // not thread-safe, has shared global state
 int process_evdev_event(
-    const Box<Window>& active_window, const libevdev_uinput* virtual_kbd, KeyMapper& keymapper, input_event ev
+    [[maybe_unused]] StatsReporter& reporter, const Box<Window>& active_window, const libevdev_uinput* virtual_kbd,
+    KeyMapper& keymapper, input_event ev
 ) {
     static std::vector<input_event> events_to_send; // reuse a global std::vector to avoid allocation in a hot loop
     events_to_send.reserve(16);
     events_to_send.clear();
     int err = 0;
     if (ev.type == EV_KEY) {
-        keymapper.process_evdev_key(active_window, ev, events_to_send);
+        {
+#ifdef REPORT_STATS
+            const auto start = std::chrono::steady_clock::now();
+            DEFER({
+                const auto end = std::chrono::steady_clock::now();
+                u64 elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+                reporter.record(elapsed);
+            });
+#endif
+            keymapper.process_evdev_key(active_window, ev, events_to_send);
+        }
         for (const auto& e : events_to_send) {
             if ((err = libevdev_uinput_write_event(virtual_kbd, e.type, e.code, e.value)) != 0) {
                 LOG_ERROR("libevdev_uinput_write_event error writing key: {}", err);
@@ -182,6 +195,7 @@ int loop(const char* dbus_addr, const char* kb_device_file) {
     DEFER(libevdev_uinput_destroy(virtual_kbd));
 
     // MAIN LOOP
+    [[maybe_unused]] StatsReporter loop_stats("main::loop::while"), process_key_stats("KeyMapper::process_evdev_key()");
     KeyMapper keymapper;
     Box<Window> active_window;
     pollfd poll_fds[2] = {
@@ -212,6 +226,16 @@ int loop(const char* dbus_addr, const char* kb_device_file) {
             LOG_ERROR("poll evdev revents error: {}", poll_fds[1].revents);
             return 6;
         }
+
+// COLLECT STATS
+#ifdef REPORT_STATS
+        const auto start = std::chrono::steady_clock::now();
+        DEFER({
+            const auto end = std::chrono::steady_clock::now();
+            u64 elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+            loop_stats.record(elapsed);
+        });
+#endif
 
         // PROCESS DBUS MESSAGES
         if (!dbus_connection_read_write(conn, 0)) { // non blocking read
@@ -266,7 +290,8 @@ int loop(const char* dbus_addr, const char* kb_device_file) {
             }
             switch (rc) {
             case LIBEVDEV_READ_STATUS_SUCCESS: {
-                if (int code = process_evdev_event(active_window, virtual_kbd, keymapper, ev); code != 0) {
+                if (int code = process_evdev_event(process_key_stats, active_window, virtual_kbd, keymapper, ev);
+                    code != 0) {
                     LOG_ERROR("error processing evdev event");
                     return code;
                 }
@@ -277,7 +302,8 @@ int loop(const char* dbus_addr, const char* kb_device_file) {
                 int sync_rc;
                 while ((sync_rc = libevdev_next_event(kbd, LIBEVDEV_READ_FLAG_SYNC, &ev)) ==
                        LIBEVDEV_READ_STATUS_SYNC) {
-                    if (int code = process_evdev_event(active_window, virtual_kbd, keymapper, ev); code != 0) {
+                    if (int code = process_evdev_event(process_key_stats, active_window, virtual_kbd, keymapper, ev);
+                        code != 0) {
                         LOG_ERROR("error processing evdev event while syncing");
                         return code;
                     }
