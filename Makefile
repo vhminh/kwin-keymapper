@@ -1,40 +1,43 @@
 .PHONY: all install run test clean fmt
 
-CXX := g++
-CXXFLAGS += -O2 -std=c++20 -Wall -Wextra -I src
-LIBS := libevdev dbus-1
-CXXFLAGS += $(shell pkg-config --cflags $(LIBS))
-LDLIBS += $(shell pkg-config --libs $(LIBS))
-
-SRCS := src/argparse.cpp \
-        src/config.cpp \
-        src/keymapper.cpp \
-        src/stats.cpp
-
-HDRS := src/argparse.h \
-        src/bitset.h \
-        src/config.h \
-        src/def.h \
-        src/defer.h \
-        src/histogram.h \
-        src/kb.h \
-        src/keymapper.h \
-        src/log.h \
-        src/stats.h \
-        src/test.h \
-        src/window.h
-
+SRC_DIR := src
+HDR_DIR := src
 OUT_DIR := out
-
 TARGET := $(OUT_DIR)/kwin-keymapper
-
 TEST_TARGET := $(OUT_DIR)/test
 
-$(TARGET): $(HDRS) $(SRCS) src/main.cpp
-	$(CXX) $(SRCS) $(CXXFLAGS) src/main.cpp -o $(TARGET) $(LDLIBS)
+SRCS := argparse.cpp \
+        config.cpp \
+        keymapper.cpp \
+        stats.cpp
 
-$(TEST_TARGET): $(HDRS) $(SRCS) src/test.cpp
-	$(CXX) $(SRCS) $(CXXFLAGS) -DTEST src/test.cpp -o $(TEST_TARGET) $(LDLIBS)
+CXX := g++
+CXXFLAGS += -O2 -std=c++20 -Wall -Wextra -MMD -MP -I $(HDR_DIR)
+LIBS := libevdev dbus-1
+CXXFLAGS += $(shell pkg-config --cflags $(LIBS))
+LDFLAGS += $(shell pkg-config --libs $(LIBS))
+
+OBJ_DIR := $(OUT_DIR)/main-obj
+OBJS := $(SRCS:%.cpp=$(OBJ_DIR)/%.o) $(OBJ_DIR)/main.o
+TEST_OBJ_DIR := $(OUT_DIR)/test-obj
+TEST_OBJS := $(SRCS:%.cpp=$(TEST_OBJ_DIR)/%.o) $(TEST_OBJ_DIR)/test.o
+
+DEPS := $(OBJS:.o=.d)
+DEPS += $(TEST_OBJS:.o=.d)
+
+$(TARGET): $(OBJS)
+	$(CXX) $(CXXFLAGS) $(OBJS) -o $@ $(LDFLAGS)
+
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(TEST_TARGET): $(TEST_OBJS)
+	$(CXX) $(CXXFLAGS) $(TEST_OBJS) -o $@ $(LDFLAGS)
+
+$(TEST_OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -DTEST -c $< -o $@
 
 DEVICE=
 
@@ -70,3 +73,4 @@ clean:
 
 all: $(TARGET) $(TEST_TARGET)
 
+-include $(DEPS)
