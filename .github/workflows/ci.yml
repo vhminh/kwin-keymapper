@@ -22,6 +22,6 @@ jobs:
           make fmt
           git diff --exit-code
       - name: Build
-        run: make
+        run: make -j 4
       - name: Test
-        run: make test
+        run: make test -j 4
